@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { Check, Moon, RotateCcw, Sun, Target, Trophy } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -26,11 +27,11 @@ const money = (v: number) =>
 const MILESTONES = [25, 50, 75, 100];
 
 function motivational(progress: number): string {
-  if (progress >= 100) return "Meta alcançada! Você é incrível.";
-  if (progress >= 75) return "Reta final! Falta pouquíssimo.";
-  if (progress >= 50) return "Metade do caminho! Continue firme.";
-  if (progress >= 25) return "Ótimo começo! O hábito está se formando.";
-  if (progress > 0) return "O primeiro passo já foi dado. Bora!";
+  if (progress >= 100) return "Meta alcançada. Excelente disciplina.";
+  if (progress >= 75) return "Reta final — falta muito pouco.";
+  if (progress >= 50) return "Metade do caminho percorrida.";
+  if (progress >= 25) return "Bom ritmo. O hábito está se formando.";
+  if (progress > 0) return "O primeiro passo já foi dado.";
   return "Comece hoje: marque o primeiro dia.";
 }
 
@@ -38,7 +39,6 @@ function Index() {
   const [state, setState] = useState<State>(initial);
   const [goalIn, setGoalIn] = useState("600");
   const [dailyIn, setDailyIn] = useState("20");
-  const [burst, setBurst] = useState<number | null>(null);
   const [milestone, setMilestone] = useState<number | null>(null);
   const [dark, setDark] = useState(false);
   const prevProgress = useRef(0);
@@ -98,52 +98,48 @@ function Index() {
     if (confirm("Deseja desmarcar todos os dias?"))
       update({ ...state, completed: Array(TOTAL).fill(false) });
   };
-  const toggle = (i: number) => {
-    if (!state.completed[i]) {
-      setBurst(i);
-      setTimeout(() => setBurst(null), 600);
-    }
+  const toggle = (i: number) =>
     update({ ...state, completed: state.completed.map((c, j) => (j === i ? !c : c)) });
-  };
 
   return (
-    <div className="bg-page min-h-screen px-4 py-10 font-sans text-foreground transition-colors duration-300">
+    <div className="bg-page min-h-screen px-4 py-10 font-sans text-foreground transition-colors duration-300 sm:py-14">
       <main className="mx-auto w-full max-w-4xl">
-        <div className="mb-4 flex justify-end">
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-primary">
+            <Target className="size-5" strokeWidth={2.5} />
+            <span className="text-sm font-extrabold uppercase tracking-widest">Desafio de 30 dias</span>
+          </div>
           <button
             onClick={() => setDark((d) => !d)}
             aria-label={dark ? "Ativar modo claro" : "Ativar modo escuro"}
-            className="rounded-full border border-border bg-card px-4 py-2 text-sm font-bold shadow-card transition hover:-translate-y-0.5"
+            className="grid size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-card transition hover:text-foreground"
           >
-            {dark ? "☀️ Claro" : "🌙 Escuro"}
+            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
         </div>
 
-        <header className="mb-8 text-center">
-          <span className="mb-3 inline-block rounded-full border border-border bg-card px-4 py-1 text-xs font-extrabold uppercase tracking-widest text-primary shadow-card">
-            Desafio de 30 dias
-          </span>
-          <h1 className="font-display text-4xl font-extrabold tracking-tight text-primary sm:text-6xl">
+        <header className="mb-10">
+          <h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
             Minha Meta Mensal
           </h1>
-          <p className="mt-3 text-muted-foreground">
-            Defina sua meta, marque cada depósito e acompanhe seu progresso.
+          <p className="mt-3 max-w-xl text-muted-foreground">
+            Defina sua meta, marque cada depósito e acompanhe seu progresso dia a dia.
           </p>
         </header>
 
-        <section className="rounded-3xl border border-border bg-card p-6 shadow-card transition-colors duration-300 sm:p-8">
+        <section className="rounded-2xl border border-border bg-card p-6 shadow-card transition-colors duration-300 sm:p-8">
           <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <Field id="goal" label="Meta mensal" value={goalIn} onChange={setGoalIn} />
             <Field id="daily" label="Valor por dia" value={dailyIn} onChange={setDailyIn} />
             <button
               onClick={apply}
-              className="rounded-xl bg-primary px-6 py-3 font-extrabold text-primary-foreground transition hover:-translate-y-0.5 hover:opacity-90 active:translate-y-0"
+              className="rounded-lg bg-primary px-6 py-3 text-sm font-bold text-primary-foreground transition hover:opacity-90 active:scale-[0.98]"
             >
               Aplicar
             </button>
           </div>
 
-          <div className="my-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="my-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Já guardado" value={money(saved)} />
             <Stat label="Falta guardar" value={money(remaining)} />
             <Stat label="Dias concluídos" value={`${done} de ${TOTAL}`} />
@@ -155,49 +151,50 @@ function Index() {
           </div>
 
           <div>
-            <div className="mb-2 flex justify-between text-sm font-bold">
-              <span>Progresso da meta</span>
-              <span className="text-primary">{Math.round(progress)}%</span>
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="text-sm font-bold">Progresso da meta</span>
+              <span className="font-display text-xl font-bold text-primary">{Math.round(progress)}%</span>
             </div>
-            <div className="relative h-4 overflow-hidden rounded-full bg-muted">
+            <div className="relative h-3 overflow-hidden rounded-full bg-muted">
               <div
-                className="bg-progress relative h-full rounded-full transition-all duration-700 ease-out"
+                className="bg-progress h-full rounded-full transition-all duration-700 ease-out"
                 style={{ width: `${progress}%` }}
-              >
-                <span className="absolute inset-0 animate-pulse rounded-full bg-white/20" />
-              </div>
+              />
               {MILESTONES.slice(0, 3).map((m) => (
                 <span
                   key={m}
-                  className="absolute top-0 h-full w-0.5 bg-foreground/20"
+                  className="absolute top-0 h-full w-px bg-foreground/15"
                   style={{ left: `${m}%` }}
                 />
               ))}
             </div>
-            <div className="mt-1 flex justify-between text-[0.65rem] font-bold text-muted-foreground">
+            <div className="mt-1.5 flex justify-between text-[0.65rem] font-bold text-muted-foreground">
               {MILESTONES.map((m) => (
                 <span key={m} className={progress >= m ? "text-primary" : ""}>
                   {m}%
                 </span>
               ))}
             </div>
-            <p className="mt-3 text-center text-sm font-bold text-primary">{motivational(progress)}</p>
+            <p className="mt-4 border-l-2 border-primary pl-3 text-sm font-semibold text-muted-foreground">
+              {motivational(progress)}
+            </p>
           </div>
 
-          <div className="mb-4 mt-8 flex items-end justify-between gap-4">
+          <div className="mb-4 mt-10 flex items-end justify-between gap-4 border-t border-border pt-8">
             <div>
-              <h2 className="font-display text-2xl font-bold">Desafio de 30 dias</h2>
-              <p className="text-sm text-muted-foreground">Clique em um quadrado sempre que guardar o valor.</p>
+              <h2 className="font-display text-xl font-bold">Calendário de depósitos</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Clique em um dia sempre que guardar o valor.</p>
             </div>
             <button
               onClick={reset}
-              className="rounded-xl border border-border bg-muted px-4 py-2 text-sm font-bold text-muted-foreground transition hover:text-destructive"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:text-destructive"
             >
+              <RotateCcw className="size-4" />
               Reiniciar
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 md:grid-cols-6">
+          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5 md:grid-cols-6">
             {state.completed.map((c, i) => (
               <button
                 key={i}
@@ -205,35 +202,30 @@ function Index() {
                 onClick={() => toggle(i)}
                 aria-label={`Dia ${i + 1}, ${money(state.dailyValue)}`}
                 aria-pressed={c}
-                className={`relative flex aspect-square flex-col items-center justify-center gap-1 rounded-2xl border-2 p-2 transition-all duration-200 hover:-translate-y-0.5 active:scale-95 ${
+                className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl border p-2 transition-all duration-150 active:scale-95 ${
                   c
-                    ? "border-primary bg-primary text-primary-foreground shadow-card"
-                    : "border-border bg-background text-foreground hover:border-primary"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-secondary"
                 }`}
               >
-                {burst === i && (
-                  <span className="pointer-events-none absolute -top-3 animate-bounce text-lg">🎉</span>
-                )}
-                <span className="text-[0.7rem] font-extrabold tracking-wider opacity-70">DIA {i + 1}</span>
-                <span
-                  className={`text-2xl font-extrabold transition-transform duration-300 ${
-                    c ? "scale-110 text-accent" : "opacity-15"
-                  }`}
-                >
-                  ✓
-                </span>
+                <span className="text-[0.65rem] font-bold uppercase tracking-wider opacity-60">Dia {i + 1}</span>
+                <Check
+                  className={`size-5 transition-all duration-200 ${c ? "scale-100 opacity-100" : "scale-50 opacity-10"}`}
+                  strokeWidth={3}
+                />
                 <span className="text-xs font-bold">{money(state.dailyValue)}</span>
               </button>
             ))}
           </div>
 
           {saved >= state.goal && (
-            <div className="mt-6 rounded-2xl bg-accent p-4 text-center font-extrabold text-accent-foreground">
-              🎊 Meta alcançada! Continue construindo esse hábito. 🎊
+            <div className="mt-8 flex items-center justify-center gap-3 rounded-xl border border-accent bg-accent/15 p-4 font-bold text-foreground">
+              <Trophy className="size-5 text-accent" />
+              Meta alcançada! Continue construindo esse hábito.
             </div>
           )}
 
-          <p className="mt-6 text-center text-xs text-muted-foreground">
+          <p className="mt-8 text-center text-xs text-muted-foreground">
             Seu progresso fica salvo neste navegador — volte quando quiser.
           </p>
         </section>
@@ -241,8 +233,9 @@ function Index() {
 
       {milestone !== null && (
         <div className="pointer-events-none fixed inset-x-0 top-6 z-50 flex justify-center px-4">
-          <div className="animate-bounce rounded-2xl border border-border bg-card px-6 py-3 text-center font-extrabold text-primary shadow-card">
-            {milestone === 100 ? "🏆 100% — Meta alcançada!" : `🎯 ${milestone}% da meta! Continue assim!`}
+          <div className="flex items-center gap-2 rounded-full border border-border bg-card px-5 py-2.5 text-sm font-bold text-primary shadow-card">
+            <Trophy className="size-4" />
+            {milestone === 100 ? "100% — Meta alcançada!" : `${milestone}% da meta alcançados`}
           </div>
         </div>
       )}
@@ -253,9 +246,9 @@ function Index() {
 function Field({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-2 block text-sm font-bold text-muted-foreground">{label}</label>
-      <div className="flex overflow-hidden rounded-xl border border-input bg-background transition focus-within:ring-2 focus-within:ring-ring">
-        <span className="grid place-items-center bg-muted px-3 font-bold text-muted-foreground">R$</span>
+      <label htmlFor={id} className="mb-2 block text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</label>
+      <div className="flex overflow-hidden rounded-lg border border-input bg-background transition focus-within:ring-2 focus-within:ring-ring">
+        <span className="grid place-items-center border-r border-input bg-muted px-3 text-sm font-bold text-muted-foreground">R$</span>
         <input
           id={id}
           type="number"
@@ -263,7 +256,7 @@ function Field({ id, label, value, onChange }: { id: string; label: string; valu
           step="0.01"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full min-w-0 bg-transparent px-3 py-3 font-bold outline-none"
+          className="w-full min-w-0 bg-transparent px-3 py-2.5 font-bold outline-none"
         />
       </div>
     </div>
@@ -272,10 +265,10 @@ function Field({ id, label, value, onChange }: { id: string; label: string; valu
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string | undefined }) {
   return (
-    <div className="rounded-2xl border border-border bg-secondary/50 p-4">
-      <small className="block text-sm font-semibold text-muted-foreground">{label}</small>
-      <strong className="font-display text-2xl">{value}</strong>
-      {hint && <small className="mt-1 block text-xs font-semibold text-primary">{hint}</small>}
+    <div className="rounded-xl border border-border bg-secondary/60 px-4 py-3.5">
+      <small className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</small>
+      <strong className="mt-1 block font-display text-2xl">{value}</strong>
+      {hint && <small className="mt-0.5 block text-xs font-semibold text-primary">{hint}</small>}
     </div>
   );
 }
