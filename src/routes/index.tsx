@@ -17,17 +17,30 @@ export const Route = createFileRoute("/")({
 
 const TOTAL = 30;
 const KEY = "monthlyGoalTracker";
+const THEME_KEY = "monthlyGoalTheme";
 type State = { goal: number; dailyValue: number; completed: boolean[] };
 const initial: State = { goal: 600, dailyValue: 20, completed: Array(TOTAL).fill(false) };
 const money = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+
+const MILESTONES = [25, 50, 75, 100];
+
+function motivational(progress: number): string {
+  if (progress >= 100) return "Meta alcançada! Você é incrível.";
+  if (progress >= 75) return "Reta final! Falta pouquíssimo.";
+  if (progress >= 50) return "Metade do caminho! Continue firme.";
+  if (progress >= 25) return "Ótimo começo! O hábito está se formando.";
+  if (progress > 0) return "O primeiro passo já foi dado. Bora!";
+  return "Comece hoje: marque o primeiro dia.";
+}
 
 function Index() {
   const [state, setState] = useState<State>(initial);
   const [goalIn, setGoalIn] = useState("600");
   const [dailyIn, setDailyIn] = useState("20");
   const [burst, setBurst] = useState<number | null>(null);
-  const [celebrated, setCelebrated] = useState(false);
+  const [milestone, setMilestone] = useState<number | null>(null);
+  const [dark, setDark] = useState(false);
   const prevProgress = useRef(0);
 
   useEffect(() => {
@@ -39,8 +52,14 @@ function Index() {
         setGoalIn(String(s.goal));
         setDailyIn(String(s.dailyValue));
       }
+      setDark(localStorage.getItem(THEME_KEY) === "dark");
     } catch {}
   }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+  }, [dark]);
 
   const update = (s: State) => {
     setState(s);
@@ -54,15 +73,15 @@ function Index() {
   const daysLeft = TOTAL - done;
   const perDayNeeded = daysLeft > 0 ? remaining / daysLeft : 0;
 
-  // longest current streak (consecutive checked days)
   let streak = 0;
   for (let i = TOTAL - 1; i >= 0 && state.completed[i]; i--) streak++;
 
   useEffect(() => {
+    const hit = MILESTONES.find((m) => progress >= m && prevProgress.current < m);
     let t: ReturnType<typeof setTimeout> | undefined;
-    if (progress >= 100 && prevProgress.current < 100) {
-      setCelebrated(true);
-      t = setTimeout(() => setCelebrated(false), 4000);
+    if (hit !== undefined) {
+      setMilestone(hit);
+      t = setTimeout(() => setMilestone(null), 3500);
     }
     prevProgress.current = progress;
     return () => {
@@ -88,8 +107,18 @@ function Index() {
   };
 
   return (
-    <div className="bg-page min-h-screen px-4 py-10 font-sans text-foreground">
+    <div className="bg-page min-h-screen px-4 py-10 font-sans text-foreground transition-colors duration-300">
       <main className="mx-auto w-full max-w-4xl">
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={() => setDark((d) => !d)}
+            aria-label={dark ? "Ativar modo claro" : "Ativar modo escuro"}
+            className="rounded-full border border-border bg-card px-4 py-2 text-sm font-bold shadow-card transition hover:-translate-y-0.5"
+          >
+            {dark ? "☀️ Claro" : "🌙 Escuro"}
+          </button>
+        </div>
+
         <header className="mb-8 text-center">
           <span className="mb-3 inline-block rounded-full border border-border bg-card px-4 py-1 text-xs font-extrabold uppercase tracking-widest text-primary shadow-card">
             Desafio de 30 dias
@@ -102,7 +131,7 @@ function Index() {
           </p>
         </header>
 
-        <section className="rounded-3xl border border-border bg-card p-6 shadow-card sm:p-8">
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-card transition-colors duration-300 sm:p-8">
           <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <Field id="goal" label="Meta mensal" value={goalIn} onChange={setGoalIn} />
             <Field id="daily" label="Valor por dia" value={dailyIn} onChange={setDailyIn} />
@@ -130,14 +159,29 @@ function Index() {
               <span>Progresso da meta</span>
               <span className="text-primary">{Math.round(progress)}%</span>
             </div>
-            <div className="h-4 overflow-hidden rounded-full bg-muted">
+            <div className="relative h-4 overflow-hidden rounded-full bg-muted">
               <div
                 className="bg-progress relative h-full rounded-full transition-all duration-700 ease-out"
                 style={{ width: `${progress}%` }}
               >
                 <span className="absolute inset-0 animate-pulse rounded-full bg-white/20" />
               </div>
+              {MILESTONES.slice(0, 3).map((m) => (
+                <span
+                  key={m}
+                  className="absolute top-0 h-full w-0.5 bg-foreground/20"
+                  style={{ left: `${m}%` }}
+                />
+              ))}
             </div>
+            <div className="mt-1 flex justify-between text-[0.65rem] font-bold text-muted-foreground">
+              {MILESTONES.map((m) => (
+                <span key={m} className={progress >= m ? "text-primary" : ""}>
+                  {m}%
+                </span>
+              ))}
+            </div>
+            <p className="mt-3 text-center text-sm font-bold text-primary">{motivational(progress)}</p>
           </div>
 
           <div className="mb-4 mt-8 flex items-end justify-between gap-4">
@@ -185,7 +229,7 @@ function Index() {
 
           {saved >= state.goal && (
             <div className="mt-6 rounded-2xl bg-accent p-4 text-center font-extrabold text-accent-foreground">
-              {celebrated ? "🎊 " : ""}Meta alcançada! Continue construindo esse hábito.{celebrated ? " 🎊" : ""}
+              🎊 Meta alcançada! Continue construindo esse hábito. 🎊
             </div>
           )}
 
@@ -194,6 +238,14 @@ function Index() {
           </p>
         </section>
       </main>
+
+      {milestone !== null && (
+        <div className="pointer-events-none fixed inset-x-0 top-6 z-50 flex justify-center px-4">
+          <div className="animate-bounce rounded-2xl border border-border bg-card px-6 py-3 text-center font-extrabold text-primary shadow-card">
+            {milestone === 100 ? "🏆 100% — Meta alcançada!" : `🎯 ${milestone}% da meta! Continue assim!`}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
