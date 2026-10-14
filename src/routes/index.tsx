@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -26,6 +26,9 @@ function Index() {
   const [state, setState] = useState<State>(initial);
   const [goalIn, setGoalIn] = useState("600");
   const [dailyIn, setDailyIn] = useState("20");
+  const [burst, setBurst] = useState<number | null>(null);
+  const [celebrated, setCelebrated] = useState(false);
+  const prevProgress = useRef(0);
 
   useEffect(() => {
     try {
@@ -48,6 +51,22 @@ function Index() {
   const saved = done * state.dailyValue;
   const remaining = Math.max(state.goal - saved, 0);
   const progress = state.goal > 0 ? Math.min((saved / state.goal) * 100, 100) : 0;
+  const daysLeft = TOTAL - done;
+  const perDayNeeded = daysLeft > 0 ? remaining / daysLeft : 0;
+
+  // longest current streak (consecutive checked days)
+  let streak = 0;
+  for (let i = TOTAL - 1; i >= 0 && state.completed[i]; i--) streak++;
+
+  useEffect(() => {
+    if (progress >= 100 && prevProgress.current < 100) {
+      setCelebrated(true);
+      const t = setTimeout(() => setCelebrated(false), 4000);
+      prevProgress.current = progress;
+      return () => clearTimeout(t);
+    }
+    prevProgress.current = progress;
+  }, [progress]);
 
   const apply = () => {
     const g = Number(goalIn), d = Number(dailyIn);
@@ -58,13 +77,21 @@ function Index() {
     if (confirm("Deseja desmarcar todos os dias?"))
       update({ ...state, completed: Array(TOTAL).fill(false) });
   };
-  const toggle = (i: number) =>
+  const toggle = (i: number) => {
+    if (!state.completed[i]) {
+      setBurst(i);
+      setTimeout(() => setBurst(null), 600);
+    }
     update({ ...state, completed: state.completed.map((c, j) => (j === i ? !c : c)) });
+  };
 
   return (
     <div className="bg-page min-h-screen px-4 py-10 font-sans text-foreground">
       <main className="mx-auto w-full max-w-4xl">
         <header className="mb-8 text-center">
+          <span className="mb-3 inline-block rounded-full border border-border bg-card px-4 py-1 text-xs font-extrabold uppercase tracking-widest text-primary shadow-card">
+            Desafio de 30 dias
+          </span>
           <h1 className="font-display text-4xl font-extrabold tracking-tight text-primary sm:text-6xl">
             Minha Meta Mensal
           </h1>
@@ -79,16 +106,21 @@ function Index() {
             <Field id="daily" label="Valor por dia" value={dailyIn} onChange={setDailyIn} />
             <button
               onClick={apply}
-              className="rounded-xl bg-primary px-6 py-3 font-extrabold text-primary-foreground transition hover:-translate-y-0.5 hover:opacity-90"
+              className="rounded-xl bg-primary px-6 py-3 font-extrabold text-primary-foreground transition hover:-translate-y-0.5 hover:opacity-90 active:translate-y-0"
             >
               Aplicar
             </button>
           </div>
 
-          <div className="my-6 grid gap-3 sm:grid-cols-3">
+          <div className="my-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Já guardado" value={money(saved)} />
             <Stat label="Falta guardar" value={money(remaining)} />
             <Stat label="Dias concluídos" value={`${done} de ${TOTAL}`} />
+            <Stat
+              label={daysLeft > 0 ? "Por dia restante" : "Sequência final"}
+              value={daysLeft > 0 ? money(perDayNeeded) : `${streak} dias`}
+              hint={streak > 1 ? `Sequência: ${streak} dias` : undefined}
+            />
           </div>
 
           <div>
@@ -97,7 +129,12 @@ function Index() {
               <span className="text-primary">{Math.round(progress)}%</span>
             </div>
             <div className="h-4 overflow-hidden rounded-full bg-muted">
-              <div className="bg-progress h-full rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+              <div
+                className="bg-progress relative h-full rounded-full transition-all duration-700 ease-out"
+                style={{ width: `${progress}%` }}
+              >
+                <span className="absolute inset-0 animate-pulse rounded-full bg-white/20" />
+              </div>
             </div>
           </div>
 
@@ -122,14 +159,23 @@ function Index() {
                 onClick={() => toggle(i)}
                 aria-label={`Dia ${i + 1}, ${money(state.dailyValue)}`}
                 aria-pressed={c}
-                className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-2xl border-2 p-2 transition hover:-translate-y-0.5 ${
+                className={`relative flex aspect-square flex-col items-center justify-center gap-1 rounded-2xl border-2 p-2 transition-all duration-200 hover:-translate-y-0.5 active:scale-95 ${
                   c
-                    ? "border-primary bg-primary text-primary-foreground"
+                    ? "border-primary bg-primary text-primary-foreground shadow-card"
                     : "border-border bg-background text-foreground hover:border-primary"
                 }`}
               >
+                {burst === i && (
+                  <span className="pointer-events-none absolute -top-3 animate-bounce text-lg">🎉</span>
+                )}
                 <span className="text-[0.7rem] font-extrabold tracking-wider opacity-70">DIA {i + 1}</span>
-                <span className={`text-2xl font-extrabold ${c ? "text-accent" : "opacity-15"}`}>✓</span>
+                <span
+                  className={`text-2xl font-extrabold transition-transform duration-300 ${
+                    c ? "scale-110 text-accent" : "opacity-15"
+                  }`}
+                >
+                  ✓
+                </span>
                 <span className="text-xs font-bold">{money(state.dailyValue)}</span>
               </button>
             ))}
@@ -137,9 +183,13 @@ function Index() {
 
           {saved >= state.goal && (
             <div className="mt-6 rounded-2xl bg-accent p-4 text-center font-extrabold text-accent-foreground">
-              Meta alcançada! Continue construindo esse hábito.
+              {celebrated ? "🎊 " : ""}Meta alcançada! Continue construindo esse hábito.{celebrated ? " 🎊" : ""}
             </div>
           )}
+
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            Seu progresso fica salvo neste navegador — volte quando quiser.
+          </p>
         </section>
       </main>
     </div>
@@ -150,7 +200,7 @@ function Field({ id, label, value, onChange }: { id: string; label: string; valu
   return (
     <div>
       <label htmlFor={id} className="mb-2 block text-sm font-bold text-muted-foreground">{label}</label>
-      <div className="flex overflow-hidden rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+      <div className="flex overflow-hidden rounded-xl border border-input bg-background transition focus-within:ring-2 focus-within:ring-ring">
         <span className="grid place-items-center bg-muted px-3 font-bold text-muted-foreground">R$</span>
         <input
           id={id}
@@ -166,11 +216,12 @@ function Field({ id, label, value, onChange }: { id: string; label: string; valu
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-2xl border border-border bg-secondary/50 p-4">
       <small className="block text-sm font-semibold text-muted-foreground">{label}</small>
       <strong className="font-display text-2xl">{value}</strong>
+      {hint && <small className="mt-1 block text-xs font-semibold text-primary">{hint}</small>}
     </div>
   );
 }
