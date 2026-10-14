@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Check, Moon, RotateCcw, Sun, Target, Trophy } from "lucide-react";
+import { Check, Moon, RotateCcw, Sun, Target, Trophy, TriangleAlert, Wand2 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -41,6 +41,8 @@ function Index() {
   const [dailyIn, setDailyIn] = useState("20");
   const [milestone, setMilestone] = useState<number | null>(null);
   const [dark, setDark] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
   const prevProgress = useRef(0);
 
   useEffect(() => {
@@ -72,6 +74,7 @@ function Index() {
   const progress = state.goal > 0 ? Math.min((saved / state.goal) * 100, 100) : 0;
   const daysLeft = TOTAL - done;
   const perDayNeeded = daysLeft > 0 ? remaining / daysLeft : 0;
+  const nextDay = state.completed.findIndex((c) => !c);
 
   let streak = 0;
   for (let i = TOTAL - 1; i >= 0 && state.completed[i]; i--) streak++;
@@ -91,13 +94,24 @@ function Index() {
 
   const apply = () => {
     const g = Number(goalIn), d = Number(dailyIn);
-    if (g <= 0 || d <= 0) return alert("Informe valores maiores que zero.");
+    if (!goalIn || !dailyIn || g <= 0 || d <= 0) {
+      setError("Informe valores maiores que zero para a meta e o valor por dia.");
+      return;
+    }
+    setError(null);
     update({ ...state, goal: g, dailyValue: d });
   };
-  const reset = () => {
-    if (confirm("Deseja desmarcar todos os dias?"))
-      update({ ...state, completed: Array(TOTAL).fill(false) });
+
+  const suggestDaily = () => {
+    const g = Number(goalIn);
+    if (g > 0) setDailyIn((g / TOTAL).toFixed(2));
   };
+
+  const reset = () => {
+    update({ ...state, completed: Array(TOTAL).fill(false) });
+    setConfirmReset(false);
+  };
+
   const toggle = (i: number) =>
     update({ ...state, completed: state.completed.map((c, j) => (j === i ? !c : c)) });
 
@@ -130,7 +144,16 @@ function Index() {
         <section className="rounded-2xl border border-border bg-card p-6 shadow-card transition-colors duration-300 sm:p-8">
           <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <Field id="goal" label="Meta mensal" value={goalIn} onChange={setGoalIn} />
-            <Field id="daily" label="Valor por dia" value={dailyIn} onChange={setDailyIn} />
+            <div>
+              <Field id="daily" label="Valor por dia" value={dailyIn} onChange={setDailyIn} />
+              <button
+                onClick={suggestDaily}
+                className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-primary transition hover:opacity-80"
+              >
+                <Wand2 className="size-3" />
+                Sugerir: meta ÷ 30 dias
+              </button>
+            </div>
             <button
               onClick={apply}
               className="rounded-lg bg-primary px-6 py-3 text-sm font-bold text-primary-foreground transition hover:opacity-90 active:scale-[0.98]"
@@ -138,6 +161,13 @@ function Index() {
               Aplicar
             </button>
           </div>
+
+          {error && (
+            <p className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
+              <TriangleAlert className="size-4 shrink-0" />
+              {error}
+            </p>
+          )}
 
           <div className="my-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Já guardado" value={money(saved)} />
@@ -185,13 +215,30 @@ function Index() {
               <h2 className="font-display text-xl font-bold">Calendário de depósitos</h2>
               <p className="mt-1 text-sm text-muted-foreground">Clique em um dia sempre que guardar o valor.</p>
             </div>
-            <button
-              onClick={reset}
-              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:text-destructive"
-            >
-              <RotateCcw className="size-4" />
-              Reiniciar
-            </button>
+            {confirmReset ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={reset}
+                  className="rounded-lg bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground transition hover:opacity-90"
+                >
+                  Confirmar
+                </button>
+                <button
+                  onClick={() => setConfirmReset(false)}
+                  className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:text-foreground"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmReset(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:text-destructive"
+              >
+                <RotateCcw className="size-4" />
+                Reiniciar
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5 md:grid-cols-6">
@@ -205,7 +252,9 @@ function Index() {
                 className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl border p-2 transition-all duration-150 active:scale-95 ${
                   c
                     ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-secondary"
+                    : i === nextDay
+                      ? "border-primary bg-background text-foreground ring-2 ring-ring/30"
+                      : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-secondary"
                 }`}
               >
                 <span className="text-[0.65rem] font-bold uppercase tracking-wider opacity-60">Dia {i + 1}</span>
