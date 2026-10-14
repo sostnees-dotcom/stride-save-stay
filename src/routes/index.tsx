@@ -59,13 +59,15 @@ function Index() {
   for (let i = TOTAL - 1; i >= 0 && state.completed[i]; i--) streak++;
 
   useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
     if (progress >= 100 && prevProgress.current < 100) {
       setCelebrated(true);
-      const t = setTimeout(() => setCelebrated(false), 4000);
-      prevProgress.current = progress;
-      return () => clearTimeout(t);
+      t = setTimeout(() => setCelebrated(false), 4000);
     }
     prevProgress.current = progress;
+    return () => {
+      if (t) clearTimeout(t);
+    };
   }, [progress]);
 
   const apply = () => {
@@ -216,7 +218,7 @@ function Field({ id, label, value, onChange }: { id: string; label: string; valu
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string | undefined }) {
   return (
     <div className="rounded-2xl border border-border bg-secondary/50 p-4">
       <small className="block text-sm font-semibold text-muted-foreground">{label}</small>
