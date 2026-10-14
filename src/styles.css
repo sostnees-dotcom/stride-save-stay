@@ -98,8 +98,8 @@
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
-  --gradient-progress: linear-gradient(90deg, var(--primary), oklch(0.65 0.15 140), var(--accent));
-  --shadow-card: 0 20px 50px -20px oklch(0.3 0.06 160 / 0.25);
+  --gradient-progress: linear-gradient(90deg, var(--primary), color-mix(in oklab, var(--primary) 70%, var(--accent)));
+  --shadow-card: 0 1px 2px oklch(0.3 0.03 165 / 0.06), 0 12px 32px -16px oklch(0.3 0.03 165 / 0.18);
 }
 
 .dark {
