@@ -8,3 +8,9 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+<!-- LOVABLE:END -->
+
+## Storage
+
+- Monthly progress is stored per month in localStorage under `monthlyGoalTracker:<YYYY-MM>` (only the completed days), while the shared goal and daily amount live in `monthlyGoalSettings`. Keep it that way so switching months never leaks another month's deposits; the older single-key `monthlyGoalTracker` entry is read once as a legacy fallback for the current month.
