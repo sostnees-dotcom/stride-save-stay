@@ -142,6 +142,7 @@ export function Index() {
   const [confirmReset, setConfirmReset] = useState(false);
   const prevProgress = useRef(0);
   const lastMonth = useRef(monthKey(NOW.getFullYear(), NOW.getMonth()));
+  const stripRef = useRef<HTMLDivElement>(null);
 
   const days = daysIn(year, month);
   const key = monthKey(year, month);
@@ -188,6 +189,17 @@ export function Index() {
       localStorage.setItem(MONTH_PREFIX + key, JSON.stringify({ completed: next }));
     } catch {}
   }, [key, days]);
+
+  // Keep the selected month in sight when the strip scrolls sideways.
+  useEffect(() => {
+    const strip = stripRef.current;
+    const chip = strip?.querySelector<HTMLElement>(`[data-month="${month}"]`);
+    if (!strip || !chip) return;
+    const cr = chip.getBoundingClientRect();
+    const sr = strip.getBoundingClientRect();
+    if (cr.left < sr.left) strip.scrollLeft -= sr.left - cr.left + 8;
+    else if (cr.right > sr.right) strip.scrollLeft += cr.right - sr.right + 8;
+  }, [year, month]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -319,7 +331,10 @@ export function Index() {
             </div>
           </div>
 
-          <div className="-mx-1 mt-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          <div
+            ref={stripRef}
+            className="-mx-1 mt-3 flex gap-1.5 overflow-x-auto px-1 pb-1"
+          >
             {MONTHS_SHORT.map((label, m) => {
               const mKey = monthKey(year, m);
               const pct = summaries[mKey] ?? 0;
