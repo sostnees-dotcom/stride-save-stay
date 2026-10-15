@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Check, Moon, RotateCcw, Sun, Target, Trophy, TriangleAlert, Wand2 } from "lucide-react";
+import { Check, Moon, RotateCcw, Sun, Target, Trophy, TriangleAlert, Wand2, ArrowUpRight, Wallet, CalendarDays } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -116,50 +118,59 @@ function Index() {
     update({ ...state, completed: state.completed.map((c, j) => (j === i ? !c : c)) });
 
   return (
-    <div className="bg-page min-h-screen px-4 py-10 font-sans text-foreground transition-colors duration-300 sm:py-14">
-      <main className="mx-auto w-full max-w-4xl">
-        <div className="mb-6 flex items-center justify-between">
+    <div className="bg-background min-h-screen px-4 py-6 font-sans text-foreground transition-colors duration-300 sm:px-8 sm:py-10">
+      <main className="mx-auto w-full max-w-5xl">
+        <div className="mb-8 flex items-center justify-between border-b border-border pb-5">
           <div className="flex items-center gap-2 text-primary">
             <Target className="size-5" strokeWidth={2.5} />
-            <span className="text-sm font-extrabold uppercase tracking-widest">Desafio de 30 dias</span>
+            <span className="text-xs font-bold uppercase tracking-normal">Desafio de 30 dias</span>
           </div>
-          <button
+          <Button
+            variant="outline"
+            size="icon"
+            title={dark ? "Ativar modo claro" : "Ativar modo escuro"}
             onClick={() => setDark((d) => !d)}
             aria-label={dark ? "Ativar modo claro" : "Ativar modo escuro"}
             className="grid size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-card transition hover:text-foreground"
           >
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          </button>
+          </Button>
         </div>
 
-        <header className="mb-10">
-          <h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
+        <header className="mb-8 flex flex-wrap items-end justify-between gap-5">
+          <div>
+          <h1 className="text-3xl font-extrabold tracking-normal sm:text-4xl">
             Minha Meta Mensal
           </h1>
           <p className="mt-3 max-w-xl text-muted-foreground">
-            Defina sua meta, marque cada depósito e acompanhe seu progresso dia a dia.
+            Um dia de cada vez. Um objetivo cada vez mais perto.
           </p>
+          </div>
+          <span className="flex items-center gap-2 text-sm font-semibold text-muted-foreground"><CalendarDays className="size-4" />{daysLeft} dias restantes</span>
         </header>
 
-        <section className="rounded-2xl border border-border bg-card p-6 shadow-card transition-colors duration-300 sm:p-8">
-          <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <section className="transition-colors duration-300">
+          <div className="grid gap-4 border-y border-border bg-card px-4 py-5 sm:grid-cols-[1fr_1fr_auto] sm:items-center sm:px-6">
             <Field id="goal" label="Meta mensal" value={goalIn} onChange={setGoalIn} />
             <div>
               <Field id="daily" label="Valor por dia" value={dailyIn} onChange={setDailyIn} />
-              <button
+              <Button
+                variant="link"
+                size="sm"
                 onClick={suggestDaily}
-                className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-primary transition hover:opacity-80"
+                className="mt-1 h-auto justify-start gap-1 p-0 text-xs font-semibold"
               >
                 <Wand2 className="size-3" />
                 Sugerir: meta ÷ 30 dias
-              </button>
+              </Button>
             </div>
-            <button
+            <Button
               onClick={apply}
-              className="rounded-lg bg-primary px-6 py-3 text-sm font-bold text-primary-foreground transition hover:opacity-90 active:scale-[0.98]"
+              className="h-11 self-start px-6 font-bold sm:mt-6"
+              title="Aplicar os valores da meta"
             >
               Aplicar
-            </button>
+            </Button>
           </div>
 
           {error && (
@@ -169,8 +180,8 @@ function Index() {
             </p>
           )}
 
-          <div className="my-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Já guardado" value={money(saved)} />
+          <div className="my-8 grid grid-cols-2 gap-x-5 gap-y-6 lg:grid-cols-4">
+            <Stat label="Já guardado" value={money(saved)} highlight />
             <Stat label="Falta guardar" value={money(remaining)} />
             <Stat label="Dias concluídos" value={`${done} de ${TOTAL}`} />
             <Stat
@@ -180,12 +191,12 @@ function Index() {
             />
           </div>
 
-          <div>
-            <div className="mb-2 flex items-baseline justify-between">
+          <div className="border-y border-border py-6">
+            <div className="mb-3 flex items-baseline justify-between">
               <span className="text-sm font-bold">Progresso da meta</span>
-              <span className="font-display text-xl font-bold text-primary">{Math.round(progress)}%</span>
+              <span className="text-2xl font-extrabold text-primary">{Math.round(progress)}%</span>
             </div>
-            <div className="relative h-3 overflow-hidden rounded-full bg-muted">
+            <div className="relative h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="Progresso da meta" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}>
               <div
                 className="bg-progress h-full rounded-full transition-all duration-700 ease-out"
                 style={{ width: `${progress}%` }}
@@ -205,77 +216,88 @@ function Index() {
                 </span>
               ))}
             </div>
-            <p className="mt-4 border-l-2 border-primary pl-3 text-sm font-semibold text-muted-foreground">
+            <p className="mt-4 text-sm font-semibold text-muted-foreground">
               {motivational(progress)}
             </p>
           </div>
 
-          <div className="mb-4 mt-10 flex items-end justify-between gap-4 border-t border-border pt-8">
+          <div className="mb-5 mt-8 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h2 className="font-display text-xl font-bold">Calendário de depósitos</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Clique em um dia sempre que guardar o valor.</p>
+              <h2 className="text-xl font-bold">Calendário de depósitos</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{money(state.dailyValue)} por depósito · {done} de {TOTAL} concluídos</p>
             </div>
             {confirmReset ? (
               <div className="flex items-center gap-2">
-                <button
+                <Button
+                  variant="destructive"
                   onClick={reset}
                   className="rounded-lg bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground transition hover:opacity-90"
                 >
                   Confirmar
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => setConfirmReset(false)}
                   className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:text-foreground"
                 >
                   Cancelar
-                </button>
+                </Button>
               </div>
             ) : (
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setConfirmReset(true)}
                 className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:text-destructive"
               >
                 <RotateCcw className="size-4" />
                 Reiniciar
-              </button>
+              </Button>
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5 md:grid-cols-6">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-6">
             {state.completed.map((c, i) => (
-              <button
+              <Button
                 key={i}
+                variant="outline"
                 type="button"
                 onClick={() => toggle(i)}
                 aria-label={`Dia ${i + 1}, ${money(state.dailyValue)}`}
                 aria-pressed={c}
-                className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl border p-2 transition-all duration-150 active:scale-95 ${
+                className={`relative flex h-24 flex-col items-center justify-center gap-1 rounded-lg border p-2 shadow-none transition-all duration-150 active:scale-95 ${
                   c
-                    ? "border-primary bg-primary text-primary-foreground"
+                    ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
                     : i === nextDay
                       ? "border-primary bg-background text-foreground ring-2 ring-ring/30"
                       : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-secondary"
                 }`}
               >
-                <span className="text-[0.65rem] font-bold uppercase tracking-wider opacity-60">Dia {i + 1}</span>
+                <span className="text-[0.65rem] font-bold uppercase tracking-normal opacity-70">Dia {i + 1}</span>
                 <Check
-                  className={`size-5 transition-all duration-200 ${c ? "scale-100 opacity-100" : "scale-50 opacity-10"}`}
+                  className={`absolute right-2 top-2 size-3 transition-all duration-200 ${c ? "scale-100 opacity-100" : "scale-50 opacity-0"}`}
                   strokeWidth={3}
                 />
-                <span className="text-xs font-bold">{money(state.dailyValue)}</span>
-              </button>
+                <span className="text-sm font-bold">{money(state.dailyValue)}</span>
+              </Button>
             ))}
           </div>
 
+          {nextDay >= 0 && (
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-6">
+              <span className="flex items-center gap-2 text-sm text-muted-foreground"><Wallet className="size-4" />Próximo depósito: dia {nextDay + 1}</span>
+              <Button onClick={() => toggle(nextDay)} className="h-10 font-semibold">Guardar {money(state.dailyValue)}<ArrowUpRight /></Button>
+            </div>
+          )}
+
           {saved >= state.goal && (
-            <div className="mt-8 flex items-center justify-center gap-3 rounded-xl border border-accent bg-accent/15 p-4 font-bold text-foreground">
+            <div className="mt-8 flex items-center justify-center gap-3 rounded-lg border border-accent bg-accent/15 p-4 font-bold text-foreground">
               <Trophy className="size-5 text-accent" />
               Meta alcançada! Continue construindo esse hábito.
             </div>
           )}
 
           <p className="mt-8 text-center text-xs text-muted-foreground">
-            Seu progresso fica salvo neste navegador — volte quando quiser.
+            Progresso salvo neste navegador
           </p>
         </section>
       </main>
@@ -295,7 +317,7 @@ function Index() {
 function Field({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-2 block text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</label>
+      <label htmlFor={id} className="mb-2 block text-xs font-bold uppercase tracking-normal text-muted-foreground">{label}</label>
       <div className="flex overflow-hidden rounded-lg border border-input bg-background transition focus-within:ring-2 focus-within:ring-ring">
         <span className="grid place-items-center border-r border-input bg-muted px-3 text-sm font-bold text-muted-foreground">R$</span>
         <input
@@ -312,11 +334,11 @@ function Field({ id, label, value, onChange }: { id: string; label: string; valu
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string | undefined }) {
+function Stat({ label, value, hint, highlight = false }: { label: string; value: string; hint?: string | undefined; highlight?: boolean }) {
   return (
-    <div className="rounded-xl border border-border bg-secondary/60 px-4 py-3.5">
-      <small className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</small>
-      <strong className="mt-1 block font-display text-2xl">{value}</strong>
+    <div className="min-w-0 border-l-2 border-border pl-4">
+      <small className="block text-xs font-bold uppercase tracking-normal text-muted-foreground">{label}</small>
+      <strong className={`mt-2 block text-xl font-extrabold sm:text-2xl ${highlight ? "text-primary" : "text-foreground"}`}>{value}</strong>
       {hint && <small className="mt-0.5 block text-xs font-semibold text-primary">{hint}</small>}
     </div>
   );
