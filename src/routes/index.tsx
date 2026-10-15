@@ -137,6 +137,7 @@ export function Index() {
   const [dailyIn, setDailyIn] = useState("20");
   const [summaries, setSummaries] = useState<Record<string, number>>({});
   const [milestone, setMilestone] = useState<number | null>(null);
+  const [todayDate, setTodayDate] = useState(NOW.getDate());
   const [dark, setDark] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -152,6 +153,7 @@ export function Index() {
     const now = new Date();
     setYear(now.getFullYear());
     setMonth(now.getMonth());
+    setTodayDate(now.getDate());
     try {
       const stored = readJSON<Settings>(localStorage.getItem(SETTINGS_KEY));
       const legacy = readJSON<Settings & { completed?: unknown }>(
