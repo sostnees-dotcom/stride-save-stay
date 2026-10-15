@@ -39,4 +39,21 @@ describe("Month progress", () => {
     );
     expect(stored.length).toBeGreaterThanOrEqual(2);
   });
+
+  it("places day 1 of the month under its real weekday column", () => {
+    const { container } = render(<Index />);
+
+    const grids = container.querySelectorAll("div.grid.grid-cols-7");
+    const grid = grids[grids.length - 1]!;
+    const now = new Date();
+    const firstWeekday = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+
+    const kids = Array.from(grid.children);
+    const firstDay = kids.findIndex((k) => k.tagName === "BUTTON");
+    expect(firstDay).toBe(firstWeekday);
+    expect(kids[firstDay]!.getAttribute("aria-label")).toMatch(/^1 de /);
+    expect(grid.querySelectorAll("button")).toHaveLength(
+      new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
+    );
+  });
 });

@@ -73,6 +73,7 @@ const MONTHS_SHORT = [
   "Dez",
 ];
 
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MILESTONES = [25, 50, 75, 100];
 
 type Settings = { goal: number; dailyValue: number };
@@ -137,6 +138,7 @@ export function Index() {
   const [dailyIn, setDailyIn] = useState("20");
   const [summaries, setSummaries] = useState<Record<string, number>>({});
   const [milestone, setMilestone] = useState<number | null>(null);
+  const [todayDate, setTodayDate] = useState(NOW.getDate());
   const [dark, setDark] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -146,12 +148,15 @@ export function Index() {
 
   const days = daysIn(year, month);
   const key = monthKey(year, month);
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const isCurrentMonth = year === NOW.getFullYear() && month === NOW.getMonth();
 
   // Settings, theme and the current month — once, from this browser's storage.
   useEffect(() => {
     const now = new Date();
     setYear(now.getFullYear());
     setMonth(now.getMonth());
+    setTodayDate(now.getDate());
     try {
       const stored = readJSON<Settings>(localStorage.getItem(SETTINGS_KEY));
       const legacy = readJSON<Settings & { completed?: unknown }>(
@@ -507,35 +512,58 @@ export function Index() {
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-6">
-            {completed.map((c, i) => (
-              <Button
-                key={i}
-                variant="outline"
-                type="button"
-                onClick={() => toggle(i)}
-                aria-label={`Dia ${i + 1}, ${money(settings.dailyValue)}`}
-                aria-pressed={c}
-                className={`relative flex h-24 flex-col items-center justify-center gap-1 rounded-lg border p-2 shadow-none transition-all duration-150 active:scale-95 ${
-                  c
-                    ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-                    : i === nextDay
-                      ? "border-primary bg-background text-foreground ring-2 ring-ring/30"
-                      : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-secondary"
-                }`}
+          <div className="mb-2 grid grid-cols-7 gap-1.5 sm:gap-2">
+            {WEEKDAYS.map((w) => (
+              <span
+                key={w}
+                className="pb-1 text-center text-[0.65rem] font-bold uppercase tracking-normal text-muted-foreground"
               >
-                <span className="text-[0.65rem] font-bold uppercase tracking-normal opacity-70">
-                  Dia {i + 1}
-                </span>
-                <Check
-                  className={`absolute right-2 top-2 size-3 transition-all duration-200 ${
-                    c ? "scale-100 opacity-100" : "scale-50 opacity-0"
-                  }`}
-                  strokeWidth={3}
-                />
-                <span className="text-sm font-bold">{money(settings.dailyValue)}</span>
-              </Button>
+                {w}
+              </span>
             ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+            {Array.from({ length: firstWeekday }).map((_, i) => (
+              <span key={`offset-${i}`} aria-hidden="true" />
+            ))}
+            {completed.map((c, i) => {
+              const weekday = new Date(year, month, i + 1).getDay();
+              const weekend = weekday === 0 || weekday === 6;
+              const isToday = isCurrentMonth && i + 1 === todayDate;
+              return (
+                <Button
+                  key={i}
+                  variant="outline"
+                  type="button"
+                  onClick={() => toggle(i)}
+                  aria-label={`${i + 1} de ${MONTHS[month]}, ${money(settings.dailyValue)}`}
+                  aria-pressed={c}
+                  className={`relative flex h-16 flex-col items-center justify-center rounded-lg border p-1 shadow-none transition-all duration-150 active:scale-95 sm:h-20 ${
+                    c
+                      ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                      : isToday
+                        ? "border-accent bg-accent/10 text-foreground"
+                        : i === nextDay
+                          ? "border-primary bg-background text-foreground ring-2 ring-ring/30"
+                          : weekend
+                            ? "border-border bg-muted/40 text-muted-foreground hover:border-primary/50 hover:bg-secondary"
+                            : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-secondary"
+                  }`}
+                >
+                  <Check
+                    className={`absolute right-1.5 top-1.5 size-3 transition-all duration-200 ${
+                      c ? "scale-100 opacity-100" : "scale-50 opacity-0"
+                    }`}
+                    strokeWidth={3}
+                  />
+                  <span className="text-sm font-extrabold sm:text-base">{i + 1}</span>
+                  <span className="hidden text-[0.6rem] font-bold opacity-70 sm:block">
+                    {money(settings.dailyValue)}
+                  </span>
+                </Button>
+              );
+            })}
           </div>
 
           {nextDay >= 0 && (
