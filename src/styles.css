@@ -154,3 +154,10 @@
     radial-gradient(ellipse 60% 40% at 50% -10%, color-mix(in oklab, var(--primary) 8%, transparent), transparent),
     var(--background);
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
