@@ -192,13 +192,16 @@ export function Index() {
 
   // Keep the selected month in sight when the strip scrolls sideways.
   useEffect(() => {
-    const strip = stripRef.current;
-    const chip = strip?.querySelector<HTMLElement>(`[data-month="${month}"]`);
-    if (!strip || !chip) return;
-    const cr = chip.getBoundingClientRect();
-    const sr = strip.getBoundingClientRect();
-    if (cr.left < sr.left) strip.scrollLeft -= sr.left - cr.left + 8;
-    else if (cr.right > sr.right) strip.scrollLeft += cr.right - sr.right + 8;
+    const id = requestAnimationFrame(() => {
+      const strip = stripRef.current;
+      const chip = strip?.querySelector<HTMLElement>(`[data-month="${month}"]`);
+      if (!strip || !chip) return;
+      const cr = chip.getBoundingClientRect();
+      const sr = strip.getBoundingClientRect();
+      if (cr.left < sr.left) strip.scrollLeft -= sr.left - cr.left + 8;
+      else if (cr.right > sr.right) strip.scrollLeft += cr.right - sr.right + 8;
+    });
+    return () => cancelAnimationFrame(id);
   }, [year, month]);
 
   useEffect(() => {
