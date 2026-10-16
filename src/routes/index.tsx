@@ -285,12 +285,12 @@ export function Index() {
     persist(completed.map((c, j) => (j === i ? !c : c)));
 
   return (
-    <div className="bg-background min-h-screen px-4 py-6 font-sans text-foreground transition-colors duration-300 sm:px-8 sm:py-10">
+    <div className="bg-page min-h-screen px-4 py-6 font-sans text-foreground transition-colors duration-300 sm:px-8 sm:py-10">
       <main className="mx-auto w-full max-w-5xl">
         <div className="mb-5 flex items-center justify-between border-b border-border pb-5">
           <div className="flex items-center gap-2 text-primary">
             <Target className="size-5" strokeWidth={2.5} />
-            <span className="text-xs font-bold uppercase tracking-normal">
+            <span className="label-caps">
               Desafio de {days} dias
             </span>
           </div>
@@ -309,10 +309,10 @@ export function Index() {
         <section aria-label="Meses" className="mb-8 border-b border-border pb-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-baseline gap-3">
-              <span className="text-xs font-bold uppercase tracking-normal text-primary">
+              <span className="label-caps text-primary">
                 Meses
               </span>
-              <span className="text-sm font-semibold text-muted-foreground">
+              <span className="font-display text-sm font-semibold italic text-muted-foreground">
                 {MONTHS[month]} de {year}
               </span>
             </div>
@@ -382,7 +382,7 @@ export function Index() {
 
         <header className="mb-8 flex flex-wrap items-end justify-between gap-5">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-normal sm:text-4xl">
+            <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">
               Minha Meta Mensal
             </h1>
             <p className="mt-3 max-w-xl text-muted-foreground">
@@ -396,7 +396,7 @@ export function Index() {
         </header>
 
         <section className="transition-colors duration-300">
-          <div className="grid gap-4 border-y border-border bg-card px-4 py-5 sm:grid-cols-[1fr_1fr_auto] sm:items-center sm:px-6">
+          <div className="shadow-panel grid gap-4 rounded-xl border border-border bg-card px-4 py-5 sm:grid-cols-[1fr_1fr_auto] sm:items-center sm:px-6">
             <Field id="goal" label="Meta mensal" value={goalIn} onChange={setGoalIn} />
             <div>
               <Field id="daily" label="Valor por dia" value={dailyIn} onChange={setDailyIn} />
@@ -439,8 +439,8 @@ export function Index() {
 
           <div className="border-y border-border py-6">
             <div className="mb-3 flex items-baseline justify-between">
-              <span className="text-sm font-bold">Progresso da meta</span>
-              <span className="text-2xl font-extrabold text-primary">
+              <span className="label-caps text-muted-foreground">Progresso da meta</span>
+              <span className="font-display text-3xl font-semibold tabular-nums text-primary">
                 {Math.round(progress)}%
               </span>
             </div>
