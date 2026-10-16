@@ -622,7 +622,7 @@ function Field({
     <div>
       <label
         htmlFor={id}
-        className="mb-2 block text-xs font-bold uppercase tracking-normal text-muted-foreground"
+        className="label-caps mb-2 block text-muted-foreground"
       >
         {label}
       </label>
@@ -656,12 +656,12 @@ function Stat({
   highlight?: boolean;
 }) {
   return (
-    <div className="min-w-0 border-l-2 border-border pl-4">
-      <small className="block text-xs font-bold uppercase tracking-normal text-muted-foreground">
+    <div className="min-w-0 border-l border-border pl-4">
+      <small className="label-caps block text-muted-foreground">
         {label}
       </small>
       <strong
-        className={`mt-2 block text-xl font-extrabold sm:text-2xl ${
+        className={`font-display mt-1.5 block text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl ${
           highlight ? "text-primary" : "text-foreground"
         }`}
       >
