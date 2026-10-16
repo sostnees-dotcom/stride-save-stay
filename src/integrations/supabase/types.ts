@@ -14,7 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      goal_settings: {
+        Row: {
+          daily_value: number
+          goal: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          daily_value?: number
+          goal?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          daily_value?: number
+          goal?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      monthly_progress: {
+        Row: {
+          completed: boolean[]
+          month: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean[]
+          month: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean[]
+          month?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
