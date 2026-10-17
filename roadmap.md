@@ -1,0 +1,3 @@
+- [ ] Corrigir entrada e restauração de sessão.
+- [ ] Salvar os dias marcados por conta e mês, com confirmação e tratamento de falhas.
+- [ ] Executar testes e verificar o retorno à conta.
