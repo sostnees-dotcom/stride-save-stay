@@ -25,13 +25,13 @@ import { supabase } from "@/integrations/supabase/client";
 export const Route = createFileRoute("/_authenticated/app")({
   head: () => ({
     meta: [
-      { title: "Minha Meta Mensal — Desafio de 30 dias" },
+      { title: "Meu calendário — Minha Meta Mensal" },
       {
         name: "description",
         content:
           "Defina sua meta, marque cada depósito e acompanhe seu progresso mês a mês.",
       },
-      { property: "og:title", content: "Minha Meta Mensal" },
+      { property: "og:title", content: "Meu calendário — Minha Meta Mensal" },
       {
         property: "og:description",
         content: "Desafio mensal para guardar dinheiro e acompanhar seu progresso.",
@@ -207,6 +207,7 @@ export function App() {
       const map: Record<string, boolean[]> = {};
       for (const r of rows ?? []) {
         const [y, m] = r.month.split("-").map(Number);
+        if (!y || !m || m < 1 || m > 12) continue;
         map[r.month] = normalize(r.completed, daysIn(y, m - 1));
       }
 
@@ -218,7 +219,7 @@ export function App() {
         const mk = full.slice(MONTH_PREFIX.length);
         if (map[mk]) continue;
         const [y, m] = mk.split("-").map(Number);
-        if (!/^\d{4}-\d{2}$/.test(mk) || !y || m < 1 || m > 12) continue;
+        if (!/^\d{4}-\d{2}$/.test(mk) || !y || !m || m < 1 || m > 12) continue;
         const data = readJSON<{ completed?: unknown }>(localStorage.getItem(full));
         const arr = normalize(data?.completed, daysIn(y, m - 1));
         if (arr.some(Boolean)) {
@@ -289,6 +290,7 @@ export function App() {
     const out: Record<string, number> = {};
     for (const [mk, arr] of Object.entries(progressMap)) {
       const [y, m] = mk.split("-").map(Number);
+      if (!y || !m || m < 1 || m > 12) continue;
       const done = normalize(arr, daysIn(y, m - 1)).filter(Boolean).length;
       out[mk] =
         settings.goal > 0
