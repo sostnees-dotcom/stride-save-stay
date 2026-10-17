@@ -37,9 +37,9 @@ function AuthPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/app", replace: true });
-    });
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) void navigate({ to: "/app", replace: true });
+    }).catch(() => setError("Não foi possível verificar sua conta. Tente entrar novamente."));
   }, [navigate]);
 
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -98,6 +98,8 @@ function AuthPage() {
         setNotice("Enviamos um link de recuperação para o seu e-mail.");
         setMode("signin");
       }
+    } catch {
+      setError("Não foi possível conectar. Verifique sua conexão e tente novamente.");
     } finally {
       setBusy(false);
     }
@@ -105,10 +107,18 @@ function AuthPage() {
 
   const oauth = async (provider: "google" | "lovable") => {
     setError(null);
-    const result = await lovable.auth.signInWithOAuth(provider, {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) setError("Não foi possível entrar agora. Tente novamente.");
+    try {
+      const result = await lovable.auth.signInWithOAuth(provider, {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) setError("Não foi possível entrar agora. Tente novamente.");
+      else {
+        const { data } = await supabase.auth.getUser();
+        if (data.user) void navigate({ to: "/app", replace: true });
+      }
+    } catch {
+      setError("Não foi possível conectar. Verifique sua conexão e tente novamente.");
+    }
   };
 
   return (
@@ -126,7 +136,7 @@ function AuthPage() {
           </p>
         </div>
 
-        <div className="shadow-panel rounded-xl border border-border bg-card p-6 sm:p-8">
+        <form onSubmit={(event) => { event.preventDefault(); void submit(); }} className="shadow-panel rounded-xl border border-border bg-card p-6 sm:p-8">
           <div className="mb-6 grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted p-1">
             {(["signin", "signup"] as const).map((m) => (
               <button
@@ -211,7 +221,7 @@ function AuthPage() {
           )}
 
           <Button
-            onClick={submit}
+            type="submit"
             disabled={busy}
             className="h-11 w-full font-bold"
           >
@@ -255,6 +265,7 @@ function AuthPage() {
           <div className="grid gap-2">
             <Button
               variant="outline"
+              type="button"
               onClick={() => oauth("google")}
               className="h-11 w-full border-border bg-card font-semibold"
             >
@@ -274,7 +285,7 @@ function AuthPage() {
               Continuar com Lovable
             </button>
           </div>
-        </div>
+        </form>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           Seus dados ficam protegidos e só você tem acesso a eles.

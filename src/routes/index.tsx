@@ -30,9 +30,9 @@ function Landing() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/app", replace: true });
-    });
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) void navigate({ to: "/app", replace: true });
+    }).catch(() => {});
   }, [navigate]);
 
   return (
