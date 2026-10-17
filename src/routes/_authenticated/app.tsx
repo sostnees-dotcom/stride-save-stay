@@ -119,6 +119,10 @@ export function App() {
   const [userId, setUserId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
   const [year, setYear] = useState(NOW.getFullYear());
   const [month, setMonth] = useState(NOW.getMonth());
   const [settings, setSettings] = useState<Settings>(initialSettings);
@@ -142,11 +146,16 @@ export function App() {
   // Load the user's profile, settings and every saved month — once.
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setLoadFailed(false);
     (async () => {
+      try {
       const {
         data: { user },
+        error: authError,
       } = await supabase.auth.getUser();
-      if (!user || cancelled) return;
+      if (cancelled) return;
+      if (authError || !user) throw new Error("Session unavailable");
       setUserId(user.id);
       const now = new Date();
       setYear(now.getFullYear());
@@ -154,7 +163,7 @@ export function App() {
       setTodayDate(now.getDate());
       setDark(localStorage.getItem(THEME_KEY) === "dark");
 
-      const [{ data: prof }, { data: setRow }, { data: rows }] = await Promise.all([
+      const [profileResult, settingsResult, progressResult] = await Promise.all([
         supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
         supabase
           .from("goal_settings")
@@ -164,13 +173,19 @@ export function App() {
         supabase.from("monthly_progress").select("month, completed").eq("user_id", user.id),
       ]);
       if (cancelled) return;
+      if (settingsResult.error || progressResult.error) throw new Error("Unable to load progress");
+      const prof = profileResult.data;
+      const setRow = settingsResult.data;
+      const rows = progressResult.data;
+      const storageOwner = localStorage.getItem("monthlyGoalStorageOwner");
+      const canImport = !storageOwner || storageOwner === user.id;
 
       setProfileName(prof?.display_name ?? "");
 
       let s = initialSettings;
       if (setRow) {
         s = { goal: Number(setRow.goal), dailyValue: Number(setRow.daily_value) };
-      } else {
+      } else if (canImport) {
         const stored = readJSON<Settings>(localStorage.getItem(SETTINGS_KEY));
         const legacy = readJSON<Settings & { completed?: unknown }>(
           localStorage.getItem(LEGACY_KEY),
@@ -179,9 +194,10 @@ export function App() {
           stored ?? (legacy ? { goal: legacy.goal, dailyValue: legacy.dailyValue } : null);
         if (local && local.goal > 0 && local.dailyValue > 0) {
           s = local;
-          void supabase
+          const { error: migrationError } = await supabase
             .from("goal_settings")
             .upsert({ user_id: user.id, goal: s.goal, daily_value: s.dailyValue });
+          if (migrationError) throw migrationError;
         }
       }
       setSettings(s);
@@ -196,13 +212,13 @@ export function App() {
 
       // Migrate months that only exist in this browser's storage.
       const pending: { user_id: string; month: string; completed: boolean[] }[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
+      for (let i = 0; canImport && i < localStorage.length; i++) {
         const full = localStorage.key(i);
         if (!full || !full.startsWith(MONTH_PREFIX)) continue;
         const mk = full.slice(MONTH_PREFIX.length);
         if (map[mk]) continue;
         const [y, m] = mk.split("-").map(Number);
-        if (!y || !m) continue;
+        if (!/^\d{4}-\d{2}$/.test(mk) || !y || m < 1 || m > 12) continue;
         const data = readJSON<{ completed?: unknown }>(localStorage.getItem(full));
         const arr = normalize(data?.completed, daysIn(y, m - 1));
         if (arr.some(Boolean)) {
@@ -211,7 +227,7 @@ export function App() {
         }
       }
       const currentKey = monthKey(now.getFullYear(), now.getMonth());
-      if (!map[currentKey]) {
+      if (canImport && !map[currentKey]) {
         const legacy = readJSON<{ completed?: unknown }>(localStorage.getItem(LEGACY_KEY));
         if (legacy) {
           const arr = normalize(legacy.completed, daysIn(now.getFullYear(), now.getMonth()));
@@ -222,15 +238,28 @@ export function App() {
         }
       }
       if (pending.length > 0) {
-        void supabase.from("monthly_progress").upsert(pending);
+        const { error: migrationError } = await supabase.from("monthly_progress").upsert(pending);
+        if (migrationError) throw migrationError;
+      }
+      if (cancelled) return;
+      if (canImport) {
+        localStorage.setItem("monthlyGoalStorageOwner", user.id);
+        localStorage.removeItem(LEGACY_KEY);
       }
       setProgressMap(map);
-      setLoading(false);
+      setError(null);
+      } catch {
+        if (cancelled) return;
+        setLoadFailed(true);
+        setError("Não foi possível carregar seus dados. Tente novamente; seus dias salvos não serão alterados.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
 
   // Keep the selected month in sight when the strip scrolls sideways.
   useEffect(() => {
@@ -269,12 +298,24 @@ export function App() {
     return out;
   }, [progressMap, settings]);
 
-  const persist = (next: boolean[]) => {
+  const persist = async (next: boolean[]) => {
+    if (!userId || saveLock.current) return;
+    saveLock.current = true;
+    setSaving(true);
+    setError(null);
+    const previous = completed;
     setProgressMap((map) => ({ ...map, [key]: next }));
-    if (userId) {
-      void supabase
+    try {
+      const { error: saveError } = await supabase
         .from("monthly_progress")
-        .upsert({ user_id: userId, month: key, completed: next });
+        .upsert({ user_id: userId, month: key, completed: next, updated_at: new Date().toISOString() });
+      if (saveError) throw saveError;
+    } catch {
+      setProgressMap((map) => ({ ...map, [key]: previous }));
+      setError("Não foi possível salvar este dia. Verifique sua conexão e marque novamente.");
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
     }
   };
 
@@ -311,7 +352,8 @@ export function App() {
     };
   }, [progress, key]);
 
-  const apply = () => {
+  const apply = async () => {
+    if (!userId || saveLock.current) return;
     const g = Number(goalIn),
       d = Number(dailyIn);
     if (!goalIn || !dailyIn || g <= 0 || d <= 0) {
@@ -320,11 +362,19 @@ export function App() {
     }
     setError(null);
     const next = { goal: g, dailyValue: d };
-    setSettings(next);
-    if (userId) {
-      void supabase
+    saveLock.current = true;
+    setSaving(true);
+    try {
+      const { error: saveError } = await supabase
         .from("goal_settings")
-        .upsert({ user_id: userId, goal: g, daily_value: d });
+        .upsert({ user_id: userId, goal: g, daily_value: d, updated_at: new Date().toISOString() });
+      if (saveError) throw saveError;
+      setSettings(next);
+    } catch {
+      setError("Não foi possível salvar os valores. Verifique sua conexão e tente novamente.");
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
     }
   };
 
@@ -342,6 +392,7 @@ export function App() {
     persist(completed.map((c, j) => (j === i ? !c : c)));
 
   const signOut = async () => {
+    if (saveLock.current) return;
     await queryClient.cancelQueries();
     queryClient.clear();
     await supabase.auth.signOut();
@@ -356,6 +407,17 @@ export function App() {
           Carregando sua meta…
         </p>
       </div>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <main className="bg-page flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-foreground">
+        <TriangleAlert className="size-6 text-destructive" />
+        <p role="alert" className="max-w-md text-center text-sm">{error}</p>
+        <Button onClick={() => setLoadAttempt((attempt) => attempt + 1)}>Tentar novamente</Button>
+        <Button variant="ghost" onClick={signOut}>Sair da conta</Button>
+      </main>
     );
   }
 
@@ -387,6 +449,7 @@ export function App() {
               variant="outline"
               size="icon"
               title="Sair da conta"
+              disabled={saving}
               onClick={signOut}
               aria-label="Sair da conta"
               className="grid size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-card transition hover:text-destructive"
@@ -500,6 +563,7 @@ export function App() {
             </div>
             <Button
               onClick={apply}
+              disabled={saving}
               className="h-11 self-start px-6 font-bold sm:mt-6"
               title="Aplicar os valores da meta"
             >
@@ -576,6 +640,7 @@ export function App() {
                 <Button
                   variant="destructive"
                   onClick={reset}
+                  disabled={saving}
                   className="rounded-lg bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground transition hover:opacity-90"
                 >
                   Confirmar
@@ -625,6 +690,7 @@ export function App() {
                   variant="outline"
                   type="button"
                   onClick={() => toggle(i)}
+                  disabled={saving}
                   aria-label={`${i + 1} de ${MONTHS[month]}, ${money(settings.dailyValue)}`}
                   aria-pressed={c}
                   className={`relative flex h-16 flex-col items-center justify-center rounded-lg border p-1 shadow-none transition-all duration-150 active:scale-95 sm:h-20 ${
@@ -660,7 +726,7 @@ export function App() {
                 <Wallet className="size-4" />
                 Próximo depósito: dia {nextDay + 1} de {MONTHS[month]}
               </span>
-              <Button onClick={() => toggle(nextDay)} className="h-10 font-semibold">
+              <Button disabled={saving} onClick={() => toggle(nextDay)} className="h-10 font-semibold">
                 Guardar {money(settings.dailyValue)}
                 <ArrowUpRight />
               </Button>
@@ -674,8 +740,8 @@ export function App() {
             </div>
           )}
 
-          <p className="mt-8 text-center text-xs text-muted-foreground">
-            Progresso salvo na sua conta, com segurança
+          <p role="status" className="mt-8 text-center text-xs text-muted-foreground">
+            {saving ? "Salvando na sua conta…" : error ? "Alteração não salva. Tente novamente." : "Progresso salvo na sua conta, com segurança"}
           </p>
         </section>
       </main>
