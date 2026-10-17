@@ -14,4 +14,9 @@ describe("App routing", () => {
 
     expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   });
+  it("resolves login and the protected calendar to their own pages", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+    expect(router.matchRoutes("/auth").at(-1)?.routeId).toBe("/auth");
+    expect(router.matchRoutes("/app").at(-1)?.routeId).toBe("/_authenticated/app");
+  });
 });

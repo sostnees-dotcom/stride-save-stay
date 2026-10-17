@@ -1,59 +1,85 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Index } from "@/routes/index";
+const cloud = vi.hoisted(() => ({
+  rows: {} as Record<string, boolean[]>, user: "account-a", failRead: false, failWrite: false,
+  upsert: vi.fn(),
+}));
+vi.mock("@tanstack/react-router", () => ({
+  createFileRoute: () => (options: unknown) => options,
+  useNavigate: () => vi.fn(),
+}));
+vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({ cancelQueries: vi.fn(), clear: vi.fn() }) }));
+vi.mock("@/integrations/supabase/client", () => ({ supabase: {
+  auth: { getUser: async () => ({ data: { user: { id: cloud.user } } }), signOut: vi.fn() },
+  from: (table: string) => ({
+    select: () => ({ eq: () => {
+      const result = { data: table === "monthly_progress"
+        ? Object.entries(cloud.rows).map(([month, completed]) => ({ month, completed })) : null,
+        error: cloud.failRead ? new Error("offline") : null };
+      return { ...result, maybeSingle: async () => result };
+    } }),
+    upsert: async (row: { month: string; completed: boolean[] }) => {
+      cloud.upsert(table, row);
+      if (cloud.failWrite) return { error: new Error("offline") };
+      if (table === "monthly_progress") cloud.rows[row.month] = [...row.completed];
+      return { error: null };
+    },
+  }),
+} }));
+import { App } from "@/routes/_authenticated/app";
 
-// pt-BR currency keeps a non-breaking space after the symbol.
-const savedValue = () =>
-  screen
-    .getByText("Já guardado")
-    .closest("div")!
-    .querySelector("strong")!
-    .textContent!.replace(/\u00a0/g, " ");
+const dayOne = () => screen.getByRole("button", { name: /^1 de / });
+const ready = () => screen.findByRole("heading", { name: "Calendário de depósitos" });
+const saved = () => waitFor(() => expect(screen.getByRole("status").textContent).toContain("Progresso salvo"));
 
-describe("Month progress", () => {
-  beforeEach(() => localStorage.clear());
+describe("Account month progress", () => {
+  beforeEach(() => {
+    localStorage.clear(); cloud.rows = {}; cloud.user = "account-a";
+    cloud.failRead = false; cloud.failWrite = false; cloud.upsert.mockClear();
+  });
   afterEach(cleanup);
 
-  it("keeps each month's deposits separate and restores them when you go back", () => {
-    const { container } = render(<Index />);
-
-    const chip = (i: number) =>
-      container.querySelectorAll<HTMLButtonElement>("[data-month]")[i]!;
-    const active = Array.from(
-      container.querySelectorAll<HTMLButtonElement>("[data-month]"),
-    ).findIndex((c) => c.getAttribute("aria-pressed") === "true");
-    const other = active === 0 ? 1 : 0;
-
-    fireEvent.click(screen.getByRole("button", { name: /^Guardar/ }));
-    expect(savedValue()).toBe("R$ 20,00");
-
-    fireEvent.click(chip(other));
-    expect(savedValue()).toBe("R$ 0,00");
-
-    fireEvent.click(chip(active));
-    expect(savedValue()).toBe("R$ 20,00");
-
-    const stored = Object.keys(localStorage).filter((k) =>
-      k.startsWith("monthlyGoalTracker:"),
-    );
-    expect(stored.length).toBeGreaterThanOrEqual(2);
+  it("restores a selected square from the account after returning to the site", async () => {
+    const view = render(<App />); await ready();
+    fireEvent.click(dayOne()); await saved();
+    expect(cloud.upsert).toHaveBeenCalledWith("monthly_progress", expect.objectContaining({ user_id: "account-a", completed: expect.arrayContaining([true]) }));
+    view.unmount(); localStorage.clear();
+    render(<App />); await ready();
+    expect(dayOne()).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("places day 1 of the month under its real weekday column", () => {
-    const { container } = render(<Index />);
+  it("keeps each month's selected days separate", async () => {
+    const { container } = render(<App />); await ready();
+    const chips = Array.from(container.querySelectorAll<HTMLButtonElement>("[data-month]"));
+    const active = chips.find((c) => c.getAttribute("aria-pressed") === "true");
+    const other = chips.find((c) => c.getAttribute("aria-pressed") === "false");
+    if (!active || !other) throw new Error("Missing month controls");
+    fireEvent.click(dayOne()); await saved();
+    fireEvent.click(other); expect(dayOne()).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(active); expect(dayOne()).toHaveAttribute("aria-pressed", "true");
+  });
 
-    const grids = container.querySelectorAll("div.grid.grid-cols-7");
-    const grid = grids[grids.length - 1]!;
-    const now = new Date();
-    const firstWeekday = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+  it("rolls back a square if the account save fails", async () => {
+    render(<App />); await ready(); cloud.failWrite = true;
+    fireEvent.click(dayOne());
+    await screen.findByText(/Não foi possível salvar este dia/);
+    expect(dayOne()).toHaveAttribute("aria-pressed", "false");
+    expect(cloud.rows).toEqual({});
+  });
 
-    const kids = Array.from(grid.children);
-    const firstDay = kids.findIndex((k) => k.tagName === "BUTTON");
-    expect(firstDay).toBe(firstWeekday);
-    expect(kids[firstDay]!.getAttribute("aria-label")).toMatch(/^1 de /);
-    expect(grid.querySelectorAll("button")).toHaveLength(
-      new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
-    );
+  it("does not overwrite account data when loading fails", async () => {
+    cloud.failRead = true; render(<App />);
+    await screen.findByRole("alert");
+    expect(cloud.upsert).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: "Calendário de depósitos" })).toBeNull();
+  });
+
+  it("does not import another account's old browser deposits", async () => {
+    localStorage.setItem("monthlyGoalStorageOwner", "account-b");
+    localStorage.setItem("monthlyGoalTracker:2026-10", JSON.stringify({ completed: [true] }));
+    render(<App />); await ready();
+    expect(cloud.upsert).not.toHaveBeenCalled();
+    expect(dayOne()).toHaveAttribute("aria-pressed", "false");
   });
 });
