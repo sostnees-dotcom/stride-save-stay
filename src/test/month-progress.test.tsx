@@ -60,12 +60,31 @@ describe("Account month progress", () => {
     fireEvent.click(active); expect(dayOne()).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("rolls back a square if the account save fails", async () => {
+  it("keeps a square marked when the save fails and saves it once the connection returns", async () => {
     render(<App />); await ready(); cloud.failWrite = true;
     fireEvent.click(dayOne());
-    await screen.findByText(/Não foi possível salvar este dia/);
-    expect(dayOne()).toHaveAttribute("aria-pressed", "false");
+    await screen.findByText(/serão salvos automaticamente/);
+    expect(dayOne()).toHaveAttribute("aria-pressed", "true");
     expect(cloud.rows).toEqual({});
+    cloud.failWrite = false;
+    fireEvent(window, new Event("online"));
+    await waitFor(() => expect(Object.values(cloud.rows)[0]?.[0]).toBe(true));
+  });
+
+  it("saves every square when several are tapped quickly", async () => {
+    render(<App />); await ready();
+    for (const d of [1, 2, 3]) fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${d} de `) }));
+    await waitFor(() => expect(Object.values(cloud.rows)[0]?.slice(0, 3)).toEqual([true, true, true]));
+  });
+
+  it("saves days left unsaved on this device when the account is opened again", async () => {
+    render(<App />); await ready(); cloud.failWrite = true;
+    fireEvent.click(dayOne());
+    await screen.findByText(/serão salvos automaticamente/);
+    cleanup(); cloud.failWrite = false;
+    render(<App />); await ready();
+    expect(dayOne()).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(Object.values(cloud.rows)[0]?.[0]).toBe(true));
   });
 
   it("does not overwrite account data when loading fails", async () => {

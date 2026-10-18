@@ -47,6 +47,7 @@ const SETTINGS_KEY = "monthlyGoalSettings";
 const LEGACY_KEY = "monthlyGoalTracker";
 const MONTH_PREFIX = "monthlyGoalTracker:";
 const THEME_KEY = "monthlyGoalTheme";
+const pendingKey = (uid: string) => `monthlyGoalPending:${uid}`;
 
 const MONTHS = [
   "Janeiro",
@@ -123,6 +124,14 @@ export function App() {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
+  // Day changes are applied instantly, kept in a per-account browser backup and
+  // saved to the account in order, retrying until the account confirms them.
+  const progressRef = useRef<Record<string, boolean[]>>({});
+  const dirty = useRef<Record<string, boolean[]>>({});
+  const flushing = useRef(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [year, setYear] = useState(NOW.getFullYear());
   const [month, setMonth] = useState(NOW.getMonth());
   const [settings, setSettings] = useState<Settings>(initialSettings);
@@ -247,8 +256,21 @@ export function App() {
         localStorage.setItem("monthlyGoalStorageOwner", user.id);
         localStorage.removeItem(LEGACY_KEY);
       }
+      // Changes this account made on this device that the account never confirmed.
+      const backup = readJSON<Record<string, unknown>>(localStorage.getItem(pendingKey(user.id)));
+      dirty.current = {};
+      for (const [mk, raw] of Object.entries(backup ?? {})) {
+        const [y, m] = mk.split("-").map(Number);
+        if (!/^\d{4}-\d{2}$/.test(mk) || !y || !m || m < 1 || m > 12) continue;
+        const arr = normalize(raw, daysIn(y, m - 1));
+        map[mk] = arr;
+        dirty.current[mk] = arr;
+      }
+      progressRef.current = map;
       setProgressMap(map);
+      setPendingCount(Object.keys(dirty.current).length);
       setError(null);
+      if (Object.keys(dirty.current).length > 0) void flush(user.id);
       } catch {
         if (cancelled) return;
         setLoadFailed(true);
@@ -300,26 +322,83 @@ export function App() {
     return out;
   }, [progressMap, settings]);
 
-  const persist = async (next: boolean[]) => {
-    if (!userId || saveLock.current) return;
-    saveLock.current = true;
-    setSaving(true);
-    setError(null);
-    const previous = completed;
-    setProgressMap((map) => ({ ...map, [key]: next }));
+  function storePending(uid: string) {
+    const count = Object.keys(dirty.current).length;
     try {
-      const { error: saveError } = await supabase
-        .from("monthly_progress")
-        .upsert({ user_id: userId, month: key, completed: next, updated_at: new Date().toISOString() });
-      if (saveError) throw saveError;
+      if (count > 0) localStorage.setItem(pendingKey(uid), JSON.stringify(dirty.current));
+      else localStorage.removeItem(pendingKey(uid));
     } catch {
-      setProgressMap((map) => ({ ...map, [key]: previous }));
-      setError("Não foi possível salvar este dia. Verifique sua conexão e marque novamente.");
-    } finally {
-      saveLock.current = false;
-      setSaving(false);
+      // Storage full or blocked: the account save below still runs.
     }
+    setPendingCount(count);
+  }
+
+  async function flush(uid: string) {
+    if (flushing.current) return;
+    flushing.current = true;
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+    try {
+      for (;;) {
+        const entry = Object.entries(dirty.current)[0];
+        if (!entry) break;
+        const [mk, arr] = entry;
+        const { error: upsertError } = await supabase.from("monthly_progress").upsert({
+          user_id: uid,
+          month: mk,
+          completed: arr,
+          updated_at: new Date().toISOString(),
+        });
+        if (upsertError) throw upsertError;
+        // Only clear it if no newer change for this month arrived meanwhile.
+        if (dirty.current[mk] === arr) {
+          delete dirty.current[mk];
+          storePending(uid);
+        }
+      }
+      setSaveError(null);
+    } catch {
+      setSaveError(
+        "Sem conexão com sua conta agora. Seus dias marcados ficam guardados neste aparelho e serão salvos automaticamente.",
+      );
+      retryTimer.current = setTimeout(() => void flush(uid), 5000);
+    } finally {
+      flushing.current = false;
+    }
+  }
+
+  const persist = (next: boolean[]) => {
+    if (!userId) return;
+    progressRef.current = { ...progressRef.current, [key]: next };
+    setProgressMap(progressRef.current);
+    dirty.current = { ...dirty.current, [key]: next };
+    storePending(userId);
+    void flush(userId);
   };
+
+  // Retry pending saves when the connection returns or the tab is hidden,
+  // and warn before closing the page with unsaved days.
+  useEffect(() => {
+    if (!userId) return;
+    const retry = () => {
+      if (Object.keys(dirty.current).length > 0) void flush(userId);
+    };
+    const onHide = () => {
+      if (document.visibilityState === "hidden") retry();
+    };
+    const onUnload = (e: BeforeUnloadEvent) => {
+      if (Object.keys(dirty.current).length > 0) e.preventDefault();
+    };
+    window.addEventListener("online", retry);
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("beforeunload", onUnload);
+    return () => {
+      window.removeEventListener("online", retry);
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("beforeunload", onUnload);
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   const done = completed.filter(Boolean).length;
   const saved = done * settings.dailyValue;
@@ -390,11 +469,19 @@ export function App() {
     setConfirmReset(false);
   };
 
-  const toggle = (i: number) =>
-    persist(completed.map((c, j) => (j === i ? !c : c)));
+  // Read the latest state (not the render snapshot) so quick taps never drop a day.
+  const toggle = (i: number) => {
+    const current = normalize(progressRef.current[key], days);
+    persist(current.map((c, j) => (j === i ? !c : c)));
+  };
 
   const signOut = async () => {
     if (saveLock.current) return;
+    if (Object.keys(dirty.current).length > 0) {
+      setSaveError("Aguarde: ainda estamos salvando seus dias marcados antes de sair.");
+      if (userId) void flush(userId);
+      return;
+    }
     await queryClient.cancelQueries();
     queryClient.clear();
     await supabase.auth.signOut();
@@ -451,7 +538,7 @@ export function App() {
               variant="outline"
               size="icon"
               title="Sair da conta"
-              disabled={saving}
+              disabled={saving || pendingCount > 0}
               onClick={signOut}
               aria-label="Sair da conta"
               className="grid size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-card transition hover:text-destructive"
@@ -573,6 +660,13 @@ export function App() {
             </Button>
           </div>
 
+          {saveError && (
+            <p role="alert" className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
+              <TriangleAlert className="size-4 shrink-0" />
+              {saveError}
+            </p>
+          )}
+
           {error && (
             <p className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
               <TriangleAlert className="size-4 shrink-0" />
@@ -642,7 +736,6 @@ export function App() {
                 <Button
                   variant="destructive"
                   onClick={reset}
-                  disabled={saving}
                   className="rounded-lg bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground transition hover:opacity-90"
                 >
                   Confirmar
@@ -692,7 +785,6 @@ export function App() {
                   variant="outline"
                   type="button"
                   onClick={() => toggle(i)}
-                  disabled={saving}
                   aria-label={`${i + 1} de ${MONTHS[month]}, ${money(settings.dailyValue)}`}
                   aria-pressed={c}
                   className={`relative flex h-16 flex-col items-center justify-center rounded-lg border p-1 shadow-none transition-all duration-150 active:scale-95 sm:h-20 ${
@@ -728,7 +820,7 @@ export function App() {
                 <Wallet className="size-4" />
                 Próximo depósito: dia {nextDay + 1} de {MONTHS[month]}
               </span>
-              <Button disabled={saving} onClick={() => toggle(nextDay)} className="h-10 font-semibold">
+              <Button onClick={() => toggle(nextDay)} className="h-10 font-semibold">
                 Guardar {money(settings.dailyValue)}
                 <ArrowUpRight />
               </Button>
@@ -743,7 +835,13 @@ export function App() {
           )}
 
           <p role="status" className="mt-8 text-center text-xs text-muted-foreground">
-            {saving ? "Salvando na sua conta…" : error ? "Alteração não salva. Tente novamente." : "Progresso salvo na sua conta, com segurança"}
+            {pendingCount > 0
+              ? saveError
+                ? "Aguardando conexão para salvar na sua conta…"
+                : "Salvando na sua conta…"
+              : saving
+                ? "Salvando na sua conta…"
+                : "Progresso salvo na sua conta, com segurança"}
           </p>
         </section>
       </main>
