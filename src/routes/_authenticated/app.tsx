@@ -47,6 +47,7 @@ const SETTINGS_KEY = "monthlyGoalSettings";
 const LEGACY_KEY = "monthlyGoalTracker";
 const MONTH_PREFIX = "monthlyGoalTracker:";
 const THEME_KEY = "monthlyGoalTheme";
+const pendingKey = (uid: string) => `monthlyGoalPending:${uid}`;
 
 const MONTHS = [
   "Janeiro",
@@ -537,7 +538,7 @@ export function App() {
               variant="outline"
               size="icon"
               title="Sair da conta"
-              disabled={saving}
+              disabled={saving || pendingCount > 0}
               onClick={signOut}
               aria-label="Sair da conta"
               className="grid size-10 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-card transition hover:text-destructive"
@@ -659,6 +660,13 @@ export function App() {
             </Button>
           </div>
 
+          {saveError && (
+            <p role="alert" className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
+              <TriangleAlert className="size-4 shrink-0" />
+              {saveError}
+            </p>
+          )}
+
           {error && (
             <p className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive">
               <TriangleAlert className="size-4 shrink-0" />
@@ -728,7 +736,6 @@ export function App() {
                 <Button
                   variant="destructive"
                   onClick={reset}
-                  disabled={saving}
                   className="rounded-lg bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground transition hover:opacity-90"
                 >
                   Confirmar
@@ -778,7 +785,6 @@ export function App() {
                   variant="outline"
                   type="button"
                   onClick={() => toggle(i)}
-                  disabled={saving}
                   aria-label={`${i + 1} de ${MONTHS[month]}, ${money(settings.dailyValue)}`}
                   aria-pressed={c}
                   className={`relative flex h-16 flex-col items-center justify-center rounded-lg border p-1 shadow-none transition-all duration-150 active:scale-95 sm:h-20 ${
@@ -814,7 +820,7 @@ export function App() {
                 <Wallet className="size-4" />
                 Próximo depósito: dia {nextDay + 1} de {MONTHS[month]}
               </span>
-              <Button disabled={saving} onClick={() => toggle(nextDay)} className="h-10 font-semibold">
+              <Button onClick={() => toggle(nextDay)} className="h-10 font-semibold">
                 Guardar {money(settings.dailyValue)}
                 <ArrowUpRight />
               </Button>
@@ -829,7 +835,13 @@ export function App() {
           )}
 
           <p role="status" className="mt-8 text-center text-xs text-muted-foreground">
-            {saving ? "Salvando na sua conta…" : error ? "Alteração não salva. Tente novamente." : "Progresso salvo na sua conta, com segurança"}
+            {pendingCount > 0
+              ? saveError
+                ? "Aguardando conexão para salvar na sua conta…"
+                : "Salvando na sua conta…"
+              : saving
+                ? "Salvando na sua conta…"
+                : "Progresso salvo na sua conta, com segurança"}
           </p>
         </section>
       </main>
