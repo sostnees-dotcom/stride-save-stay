@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      goal_progress: {
+        Row: {
+          completed: boolean[]
+          goal_id: string
+          month: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean[]
+          goal_id: string
+          month: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean[]
+          goal_id?: string
+          month?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_progress_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       goal_settings: {
         Row: {
           daily_value: number
@@ -30,6 +62,36 @@ export type Database = {
         Update: {
           daily_value?: number
           goal?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      goals: {
+        Row: {
+          created_at: string
+          daily_value: number
+          goal: number
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_value?: number
+          goal?: number
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_value?: number
+          goal?: number
+          id?: string
+          name?: string
           updated_at?: string
           user_id?: string
         }
@@ -60,20 +122,26 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          currency: string
           display_name: string | null
           id: string
+          theme: string
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          currency?: string
           display_name?: string | null
           id: string
+          theme?: string
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
+          currency?: string
           display_name?: string | null
           id?: string
+          theme?: string
         }
         Relationships: []
       }
