@@ -8,6 +8,13 @@
       "when": 1792110939334,
       "tag": "0000_profiles_and_goal_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792450897416,
+      "tag": "0001_goals_and_preferences",
+      "breakpoints": true
     }
   ]
 }
