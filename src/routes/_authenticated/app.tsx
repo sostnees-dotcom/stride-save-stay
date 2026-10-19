@@ -1,8 +1,10 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
+  BarChart3,
+  Settings as SettingsIcon,
   CalendarDays,
   Check,
   ChevronLeft,
@@ -21,6 +23,14 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  MAIN_GOAL,
+  currencySymbol,
+  formatMoney,
+  parseProgressKey,
+  progressKey,
+  type GoalInfo,
+} from "@/lib/goals";
 
 export const Route = createFileRoute("/_authenticated/app")({
   head: () => ({
@@ -85,8 +95,9 @@ type Settings = { goal: number; dailyValue: number };
 const initialSettings: Settings = { goal: 600, dailyValue: 20 };
 const NOW = new Date();
 
-const money = (v: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+// Account currency, set once the profile loads.
+let CURRENCY = "BRL";
+const money = (v: number) => formatMoney(v, CURRENCY);
 const pad = (n: number) => String(n).padStart(2, "0");
 const monthKey = (y: number, m: number) => `${y}-${pad(m + 1)}`;
 const daysIn = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
@@ -134,7 +145,13 @@ export function App() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [year, setYear] = useState(NOW.getFullYear());
   const [month, setMonth] = useState(NOW.getMonth());
-  const [settings, setSettings] = useState<Settings>(initialSettings);
+  const [mainSettings, setSettings] = useState<Settings>(initialSettings);
+  const [goals, setGoals] = useState<GoalInfo[]>([]);
+  const [activeGoal, setActiveGoal] = useState<string>(MAIN_GOAL);
+  const activeExtra = goals.find((g) => g.id === activeGoal);
+  const settings: Settings = activeExtra
+    ? { goal: activeExtra.goal, dailyValue: activeExtra.dailyValue }
+    : mainSettings;
   const [progressMap, setProgressMap] = useState<Record<string, boolean[]>>({});
   const [goalIn, setGoalIn] = useState("600");
   const [dailyIn, setDailyIn] = useState("20");
@@ -148,7 +165,7 @@ export function App() {
   const stripRef = useRef<HTMLDivElement>(null);
 
   const days = daysIn(year, month);
-  const key = monthKey(year, month);
+  const key = progressKey(activeExtra ? activeGoal : MAIN_GOAL, monthKey(year, month));
   const firstWeekday = new Date(year, month, 1).getDay();
   const isCurrentMonth = year === NOW.getFullYear() && month === NOW.getMonth();
 
@@ -172,17 +189,19 @@ export function App() {
       setTodayDate(now.getDate());
       setDark(localStorage.getItem(THEME_KEY) === "dark");
 
-      const [profileResult, settingsResult, progressResult] = await Promise.all([
-        supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+      const [profileResult, settingsResult, progressResult, goalsResult, goalProgressResult] = await Promise.all([
+        supabase.from("profiles").select("display_name, currency").eq("id", user.id).maybeSingle(),
         supabase
           .from("goal_settings")
           .select("goal, daily_value")
           .eq("user_id", user.id)
           .maybeSingle(),
         supabase.from("monthly_progress").select("month, completed").eq("user_id", user.id),
+        supabase.from("goals").select("id, name, goal, daily_value, created_at").eq("user_id", user.id),
+        supabase.from("goal_progress").select("goal_id, month, completed").eq("user_id", user.id),
       ]);
       if (cancelled) return;
-      if (settingsResult.error || progressResult.error) throw new Error("Unable to load progress");
+      if (settingsResult.error || progressResult.error || goalsResult.error || goalProgressResult.error) throw new Error("Unable to load progress");
       const prof = profileResult.data;
       const setRow = settingsResult.data;
       const rows = progressResult.data;
@@ -190,6 +209,13 @@ export function App() {
       const canImport = !storageOwner || storageOwner === user.id;
 
       setProfileName(prof?.display_name ?? "");
+      CURRENCY = (prof as { currency?: string } | null)?.currency ?? "BRL";
+      const extras = [...(goalsResult.data ?? [])]
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        .map((g) => ({ id: g.id, name: g.name, goal: Number(g.goal), dailyValue: Number(g.daily_value) }));
+      setGoals(extras);
+      const wanted = localStorage.getItem("monthlyGoalActive");
+      setActiveGoal(extras.some((g) => g.id === wanted) ? wanted! : MAIN_GOAL);
 
       let s = initialSettings;
       if (setRow) {
@@ -218,6 +244,11 @@ export function App() {
         const [y, m] = r.month.split("-").map(Number);
         if (!y || !m || m < 1 || m > 12) continue;
         map[r.month] = normalize(r.completed, daysIn(y, m - 1));
+      }
+      for (const r of goalProgressResult.data ?? []) {
+        const k = progressKey(r.goal_id, r.month);
+        const parsed = parseProgressKey(k);
+        if (parsed) map[k] = normalize(r.completed, daysIn(parsed.y, parsed.m));
       }
 
       // Migrate months that only exist in this browser's storage.
@@ -260,9 +291,9 @@ export function App() {
       const backup = readJSON<Record<string, unknown>>(localStorage.getItem(pendingKey(user.id)));
       dirty.current = {};
       for (const [mk, raw] of Object.entries(backup ?? {})) {
-        const [y, m] = mk.split("-").map(Number);
-        if (!/^\d{4}-\d{2}$/.test(mk) || !y || !m || m < 1 || m > 12) continue;
-        const arr = normalize(raw, daysIn(y, m - 1));
+        const parsed = parseProgressKey(mk);
+        if (!parsed) continue;
+        const arr = normalize(raw, daysIn(parsed.y, parsed.m));
         map[mk] = arr;
         dirty.current[mk] = arr;
       }
@@ -283,6 +314,15 @@ export function App() {
       cancelled = true;
     };
   }, [loadAttempt]);
+
+  // Show the chosen goal's values in the inputs when switching goals.
+  useEffect(() => {
+    setGoalIn(String(settings.goal));
+    setDailyIn(String(settings.dailyValue));
+    setError(null);
+    if (!loading) localStorage.setItem("monthlyGoalActive", activeGoal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGoal]);
 
   // Keep the selected month in sight when the strip scrolls sideways.
   useEffect(() => {
@@ -310,17 +350,18 @@ export function App() {
 
   const summaries = useMemo(() => {
     const out: Record<string, number> = {};
-    for (const [mk, arr] of Object.entries(progressMap)) {
-      const [y, m] = mk.split("-").map(Number);
-      if (!y || !m || m < 1 || m > 12) continue;
-      const done = normalize(arr, daysIn(y, m - 1)).filter(Boolean).length;
-      out[mk] =
+    const wantedGoal = activeExtra ? activeGoal : MAIN_GOAL;
+    for (const [k, arr] of Object.entries(progressMap)) {
+      const parsed = parseProgressKey(k);
+      if (!parsed || parsed.goalId !== wantedGoal) continue;
+      const done = normalize(arr, daysIn(parsed.y, parsed.m)).filter(Boolean).length;
+      out[parsed.month] =
         settings.goal > 0
           ? Math.min(((done * settings.dailyValue) / settings.goal) * 100, 100)
           : 0;
     }
     return out;
-  }, [progressMap, settings]);
+  }, [progressMap, settings.goal, settings.dailyValue, activeGoal, activeExtra]);
 
   function storePending(uid: string) {
     const count = Object.keys(dirty.current).length;
@@ -342,12 +383,28 @@ export function App() {
         const entry = Object.entries(dirty.current)[0];
         if (!entry) break;
         const [mk, arr] = entry;
-        const { error: upsertError } = await supabase.from("monthly_progress").upsert({
-          user_id: uid,
-          month: mk,
-          completed: arr,
-          updated_at: new Date().toISOString(),
-        });
+        const parsed = parseProgressKey(mk);
+        if (!parsed) {
+          delete dirty.current[mk];
+          storePending(uid);
+          continue;
+        }
+        const updated_at = new Date().toISOString();
+        const { error: upsertError } =
+          parsed.goalId === MAIN_GOAL
+            ? await supabase.from("monthly_progress").upsert({
+                user_id: uid,
+                month: parsed.month,
+                completed: arr,
+                updated_at,
+              })
+            : await supabase.from("goal_progress").upsert({
+                goal_id: parsed.goalId,
+                user_id: uid,
+                month: parsed.month,
+                completed: arr,
+                updated_at,
+              });
         if (upsertError) throw upsertError;
         // Only clear it if no newer change for this month arrived meanwhile.
         if (dirty.current[mk] === arr) {
@@ -446,11 +503,21 @@ export function App() {
     saveLock.current = true;
     setSaving(true);
     try {
-      const { error: saveError } = await supabase
-        .from("goal_settings")
-        .upsert({ user_id: userId, goal: g, daily_value: d, updated_at: new Date().toISOString() });
-      if (saveError) throw saveError;
-      setSettings(next);
+      const updated_at = new Date().toISOString();
+      if (activeExtra) {
+        const { error: saveError } = await supabase
+          .from("goals")
+          .update({ goal: g, daily_value: d, updated_at })
+          .eq("id", activeExtra.id);
+        if (saveError) throw saveError;
+        setGoals((list) => list.map((x) => (x.id === activeExtra.id ? { ...x, goal: g, dailyValue: d } : x)));
+      } else {
+        const { error: saveError } = await supabase
+          .from("goal_settings")
+          .upsert({ user_id: userId, goal: g, daily_value: d, updated_at });
+        if (saveError) throw saveError;
+        setSettings(next);
+      }
     } catch {
       setError("Não foi possível salvar os valores. Verifique sua conexão e tente novamente.");
     } finally {
@@ -524,6 +591,16 @@ export function App() {
                 Olá, {profileName}
               </span>
             )}
+            <Button asChild variant="outline" size="icon" title="Histórico e conquistas" className="size-10 rounded-full border-border bg-card text-muted-foreground shadow-card hover:text-foreground">
+              <Link to="/historico" aria-label="Histórico e conquistas">
+                <BarChart3 className="size-4" />
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="icon" title="Configurações" className="size-10 rounded-full border-border bg-card text-muted-foreground shadow-card hover:text-foreground">
+              <Link to="/configuracoes" aria-label="Configurações">
+                <SettingsIcon className="size-4" />
+              </Link>
+            </Button>
             <Button
               variant="outline"
               size="icon"
@@ -547,6 +624,26 @@ export function App() {
             </Button>
           </div>
         </div>
+
+        {goals.length > 0 && (
+          <nav aria-label="Metas" className="mb-5 flex flex-wrap gap-2">
+            {[{ id: MAIN_GOAL, name: "Meta principal" }, ...goals].map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                aria-pressed={(activeExtra ? activeGoal : MAIN_GOAL) === g.id}
+                onClick={() => setActiveGoal(g.id)}
+                className={`rounded-full border px-4 py-1.5 text-sm font-bold transition-colors ${
+                  (activeExtra ? activeGoal : MAIN_GOAL) === g.id
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {g.name}
+              </button>
+            ))}
+          </nav>
+        )}
 
         <section aria-label="Meses" className="mb-8 border-b border-border pb-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -623,7 +720,7 @@ export function App() {
         <header className="mb-8 flex flex-wrap items-end justify-between gap-5">
           <div>
             <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-              Minha Meta Mensal
+              {activeExtra ? activeExtra.name : "Minha Meta Mensal"}
             </h1>
             <p className="mt-3 max-w-xl text-muted-foreground">
               Um dia de cada vez. Um objetivo cada vez mais perto.
@@ -876,7 +973,7 @@ function Field({
       </label>
       <div className="flex overflow-hidden rounded-lg border border-input bg-background transition focus-within:ring-2 focus-within:ring-ring">
         <span className="grid place-items-center border-r border-input bg-muted px-3 text-sm font-bold text-muted-foreground">
-          R$
+          {currencySymbol(CURRENCY)}
         </span>
         <input
           id={id}
