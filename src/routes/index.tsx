@@ -7,6 +7,7 @@ import {
   Coins,
   Moon,
   RefreshCw,
+  RotateCcw,
   ShieldCheck,
   Target,
   TrendingUp,
@@ -20,6 +21,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { formatMoney } from "@/lib/goals";
 
@@ -75,6 +77,12 @@ function Landing() {
             className="hidden rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:inline-block"
           >
             Recursos
+          </a>
+          <a
+            href="#simulador"
+            className="hidden rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:inline-block"
+          >
+            Simulador
           </a>
           <a
             href="#perguntas"
@@ -181,6 +189,23 @@ function Landing() {
               text="Use o visual que for melhor para seus olhos, ou deixe seguir o do seu aparelho."
             />
           </div>
+        </section>
+
+        {/* Simulador */}
+        <section
+          id="simulador"
+          className="scroll-mt-8 grid items-center gap-10 border-t border-border py-16 lg:grid-cols-[0.9fr_1.1fr]"
+        >
+          <div>
+            <h2 className="font-display max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
+              Quanto dá para juntar guardando um pouco por dia?
+            </h2>
+            <p className="mt-3 max-w-md leading-relaxed text-muted-foreground">
+              Arraste o valor diário e veja o total no mês e no ano. É só a soma
+              dos seus depósitos, sem rendimento.
+            </p>
+          </div>
+          <Simulator />
         </section>
 
         {/* Conquistas */}
@@ -290,20 +315,75 @@ function Landing() {
 }
 
 const DEMO_DAYS = 30;
-const DEMO_DAILY = 20;
-const DEMO_GOAL = DEMO_DAYS * DEMO_DAILY;
+const DEMO_START = 11;
+const DEMO_VALUES = [10, 20, 50];
+
+function Simulator() {
+  const [daily, setDaily] = useState(15);
+  const month = daily * 30;
+  const year = daily * 365;
+  const daysToThousand = Math.ceil(1000 / daily);
+
+  return (
+    <div className="shadow-panel rounded-2xl border border-border bg-card p-5 sm:p-6">
+      <div className="flex items-baseline justify-between gap-4">
+        <label htmlFor="simulador-valor" className="text-sm font-semibold text-muted-foreground">
+          Valor guardado por dia
+        </label>
+        <output
+          id="simulador-valor"
+          className="font-display text-3xl font-semibold tabular-nums tracking-tight"
+        >
+          {formatMoney(daily)}
+        </output>
+      </div>
+      <Slider
+        className="mt-5"
+        min={1}
+        max={100}
+        step={1}
+        value={[daily]}
+        onValueChange={(v) => setDaily(v[0] ?? 1)}
+        aria-label="Valor guardado por dia"
+      />
+      <div className="mt-1.5 flex justify-between text-[11px] font-semibold tabular-nums text-muted-foreground">
+        <span>{formatMoney(1)}</span>
+        <span>{formatMoney(100)}</span>
+      </div>
+
+      <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-5">
+        <div>
+          <dt className="text-sm text-muted-foreground">Em 30 dias</dt>
+          <dd className="font-display text-2xl font-semibold tabular-nums">{formatMoney(month)}</dd>
+        </div>
+        <div>
+          <dt className="text-sm text-muted-foreground">Em 1 ano</dt>
+          <dd className="font-display text-2xl font-semibold tabular-nums">{formatMoney(year)}</dd>
+        </div>
+      </dl>
+      <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">
+        {daysToThousand === 1
+          ? `Você chega a ${formatMoney(1000)} em 1 dia.`
+          : `Você chega a ${formatMoney(1000)} em ${daysToThousand} dias.`}
+      </p>
+    </div>
+  );
+}
 
 function ChallengeDemo() {
+  const [daily, setDaily] = useState(20);
   const [done, setDone] = useState<boolean[]>(() =>
-    Array.from({ length: DEMO_DAYS }, (_, i) => i < 11),
+    Array.from({ length: DEMO_DAYS }, (_, i) => i < DEMO_START),
   );
+  const goal = DEMO_DAYS * daily;
   const count = done.filter(Boolean).length;
-  const saved = count * DEMO_DAILY;
-  const pct = Math.round((saved / DEMO_GOAL) * 100);
+  const saved = count * daily;
+  const pct = Math.round((saved / goal) * 100);
   const remaining = DEMO_DAYS - count;
 
   const toggle = (i: number) =>
     setDone((prev) => prev.map((v, idx) => (idx === i ? !v : v)));
+  const reset = () => setDone(Array.from({ length: DEMO_DAYS }, (_, i) => i < DEMO_START));
 
   return (
     <div className="shadow-panel rounded-2xl border border-border bg-card p-5 sm:p-6">
@@ -315,8 +395,32 @@ function ChallengeDemo() {
           </p>
         </div>
         <p className="pb-1 text-right text-sm text-muted-foreground">
-          meta de {formatMoney(DEMO_GOAL)}
+          meta de {formatMoney(goal)}
         </p>
+      </div>
+
+      <div
+        role="group"
+        aria-label="Valor por dia no exemplo"
+        className="mt-4 flex flex-wrap items-center gap-2"
+      >
+        <span className="text-sm text-muted-foreground">Por dia:</span>
+        {DEMO_VALUES.map((v) => (
+          <button
+            key={v}
+            type="button"
+            aria-pressed={daily === v}
+            onClick={() => setDaily(v)}
+            className={
+              "cursor-pointer rounded-full border px-3 py-1 text-sm font-semibold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+              (daily === v
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-secondary text-secondary-foreground hover:bg-primary/15")
+            }
+          >
+            {formatMoney(v)}
+          </button>
+        ))}
       </div>
 
       <div
@@ -360,11 +464,21 @@ function ChallengeDemo() {
         ))}
       </div>
 
-      <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">
-        {remaining === 0
-          ? "Meta batida! Todos os dias foram marcados."
-          : `${count} de ${DEMO_DAYS} dias marcados, faltam ${remaining}. Toque nos dias para testar.`}
-      </p>
+      <div className="mt-4 flex items-start justify-between gap-3">
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {remaining === 0
+            ? "Meta batida! Todos os dias foram marcados."
+            : `${count} de ${DEMO_DAYS} dias marcados, faltam ${remaining}. Toque nos dias para testar.`}
+        </p>
+        <button
+          type="button"
+          onClick={reset}
+          className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <RotateCcw className="size-3.5" />
+          Reiniciar
+        </button>
+      </div>
     </div>
   );
 }
