@@ -79,14 +79,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Stride Save Stay" },
+      { title: "Minha Meta Mensal" },
       {
         name: "description",
         content: "Acompanhe seus depósitos diários e bata sua meta de economia todo mês.",
       },
       { name: "theme-color", content: "#0b4a32" },
       { property: "og:type", content: "website" },
-      { property: "og:title", content: "Stride Save Stay" },
+      { property: "og:title", content: "Minha Meta Mensal" },
       {
         property: "og:description",
         content: "Acompanhe seus depósitos diários e bata sua meta de economia todo mês.",
