@@ -84,7 +84,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "description",
         content: "Acompanhe seus depósitos diários e bata sua meta de economia todo mês.",
       },
-      { name: "theme-color", content: "#0b4a32" },
+      { name: "theme-color", content: "#2a50c8", media: "(prefers-color-scheme: light)" },
+      { name: "theme-color", content: "#0d1530", media: "(prefers-color-scheme: dark)" },
+      { name: "color-scheme", content: "light dark" },
       { property: "og:type", content: "website" },
       { property: "og:title", content: "Minha Meta Mensal" },
       {
@@ -99,10 +101,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Manrope:wght@400;600;800&display=swap" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600;700&display=swap",
+      },
       { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+    ],
+    // Applies the saved theme before first paint so the page never flashes the wrong colors.
+    scripts: [
+      {
+        children:
+          "try{var p=localStorage.getItem('monthlyGoalThemePref')||'system';var d=p==='dark'||(p==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch(e){}",
+      },
     ],
   }),
   shellComponent: RootShell,
@@ -113,7 +126,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
