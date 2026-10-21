@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ArrowRight,
   CalendarCheck2,
@@ -9,6 +9,7 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldCheck,
+  Sun,
   Target,
   TrendingUp,
   Trophy,
@@ -23,7 +24,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
-import { formatMoney } from "@/lib/goals";
+import { applyTheme } from "@/lib/goal-data";
+import { CURRENCIES, formatMoney } from "@/lib/goals";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -46,6 +48,46 @@ export const Route = createFileRoute("/")({
   component: Landing,
 });
 
+const NAV = [
+  { href: "#como-funciona", label: "Como funciona" },
+  { href: "#recursos", label: "Recursos" },
+  { href: "#simulador", label: "Simulador" },
+  { href: "#perguntas", label: "Perguntas" },
+];
+
+const navLink =
+  "rounded-full px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** Animates a number toward its target (instant when the user prefers reduced motion). */
+function useAnimatedNumber(target: number, ms = 380) {
+  const [value, setValue] = useState(target);
+  const from = useRef(target);
+
+  useEffect(() => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      from.current = target;
+      setValue(target);
+      return;
+    }
+    const start = performance.now();
+    const origin = from.current;
+    let raf = 0;
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / ms);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const current = origin + (target - origin) * eased;
+      from.current = current;
+      setValue(current);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+
+  return value;
+}
+
 function Landing() {
   const navigate = useNavigate();
 
@@ -59,81 +101,84 @@ function Landing() {
   }, [navigate]);
 
   return (
-    <div className="bg-page flex min-h-screen flex-col px-4 py-6 font-sans text-foreground sm:px-8">
-      <header className="mx-auto flex w-full max-w-5xl items-center justify-between border-b border-border pb-5">
-        <div className="flex items-center gap-2 text-primary">
-          <Target className="size-5" strokeWidth={2.5} />
-          <span className="font-display text-lg font-semibold">Minha Meta Mensal</span>
-        </div>
-        <nav aria-label="Seções" className="flex items-center gap-1 sm:gap-2">
-          <a
-            href="#como-funciona"
-            className="hidden rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:inline-block"
-          >
-            Como funciona
-          </a>
-          <a
-            href="#recursos"
-            className="hidden rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:inline-block"
-          >
-            Recursos
-          </a>
-          <a
-            href="#simulador"
-            className="hidden rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:inline-block"
-          >
-            Simulador
-          </a>
-          <a
-            href="#perguntas"
-            className="hidden rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:inline-block"
-          >
-            Perguntas
-          </a>
-          <Link to="/auth">
-            <Button variant="outline" className="border-border bg-card font-semibold">
-              Entrar
-            </Button>
-          </Link>
-        </nav>
-      </header>
+    <div className="bg-page flex min-h-screen flex-col font-sans text-foreground">
+      <div
+        aria-hidden="true"
+        className="scroll-progress bg-progress fixed inset-x-0 top-0 z-50 h-1"
+      />
 
-      <main className="mx-auto w-full max-w-5xl flex-1">
+      <div className="px-4 pt-4 sm:px-8">
+        <header className="glass shadow-card sticky top-3 z-40 mx-auto flex w-full max-w-6xl items-center justify-between gap-3 rounded-full border border-border py-2 pl-5 pr-2">
+          <div className="flex items-center gap-2 text-primary">
+            <Target className="size-5" strokeWidth={2.5} />
+            <span className="font-display text-lg font-extrabold tracking-tight">
+              Minha Meta Mensal
+            </span>
+          </div>
+          <nav aria-label="Seções" className="hidden items-center gap-1 md:flex">
+            {NAV.map((n) => (
+              <a key={n.href} href={n.href} className={navLink}>
+                {n.label}
+              </a>
+            ))}
+          </nav>
+          <div className="flex items-center gap-1.5">
+            <ThemeToggle />
+            <Link to="/auth">
+              <Button className="rounded-full px-5 font-bold">Entrar</Button>
+            </Link>
+          </div>
+        </header>
+      </div>
+
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 sm:px-8">
         {/* Hero */}
-        <section className="grid items-center gap-10 py-14 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14 lg:py-20">
+        <section className="grid items-center gap-12 py-14 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16 lg:py-24">
           <div>
-            <h1 className="font-display max-w-xl text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
+            <h1
+              className="rise font-display text-5xl font-extrabold leading-[0.98] tracking-tight sm:text-6xl lg:text-7xl"
+              style={{ animationDelay: "0ms" }}
+            >
               Um dia de cada vez. Um objetivo cada vez mais perto.
             </h1>
-            <p className="mt-5 max-w-lg text-lg leading-relaxed text-muted-foreground">
+            <p
+              className="rise mt-6 max-w-lg text-lg leading-relaxed text-muted-foreground"
+              style={{ animationDelay: "120ms" }}
+            >
               Defina quanto quer guardar no mês, marque cada depósito e veja seu
               progresso crescer, com seus dados protegidos na sua conta.
             </p>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div
+              className="rise mt-9 flex flex-wrap items-center gap-3"
+              style={{ animationDelay: "220ms" }}
+            >
               <Link to="/auth">
-                <Button className="h-12 px-7 text-base font-bold">
+                <Button className="h-12 rounded-full px-8 text-base font-bold shadow-card">
                   Começar agora
                   <ArrowRight className="size-4" />
                 </Button>
               </Link>
-              <a
-                href="#como-funciona"
-                className="rounded-md px-3 py-2 text-sm font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                Ver como funciona
+              <a href="#simulador" className={navLink + " inline-flex h-12 items-center px-5"}>
+                Simular minha economia
               </a>
             </div>
           </div>
 
-          <ChallengeDemo />
+          <div className="rise" style={{ animationDelay: "320ms" }}>
+            <ChallengeDemo />
+          </div>
         </section>
 
         {/* Como funciona */}
-        <section id="como-funciona" className="scroll-mt-8 border-t border-border py-16">
-          <h2 className="font-display max-w-xl text-3xl font-semibold tracking-tight sm:text-4xl">
+        <section id="como-funciona" className="scroll-mt-24 border-t border-border py-20">
+          <h2 className="font-display max-w-2xl text-4xl font-extrabold tracking-tight sm:text-5xl">
             Três passos para o mês fechar no verde
           </h2>
-          <ol className="mt-10 grid gap-8 sm:grid-cols-3">
+          <ol className="relative mt-12 grid gap-10 md:grid-cols-3">
+            <div
+              aria-hidden="true"
+              className="absolute left-0 right-0 top-6 hidden border-t-2 border-dashed border-border md:block"
+            />
             <Step
               n="1"
               title="Defina a meta"
@@ -152,55 +197,95 @@ function Landing() {
           </ol>
         </section>
 
-        {/* Recursos */}
-        <section id="recursos" className="scroll-mt-8 border-t border-border py-16">
-          <h2 className="font-display max-w-xl text-3xl font-semibold tracking-tight sm:text-4xl">
+        {/* Recursos (bento) */}
+        <section id="recursos" className="scroll-mt-24 border-t border-border py-20">
+          <h2 className="font-display max-w-2xl text-4xl font-extrabold tracking-tight sm:text-5xl">
             Tudo o que você precisa para manter o hábito
           </h2>
-          <div className="mt-10 grid gap-x-12 gap-y-8 sm:grid-cols-2">
-            <Feature
-              icon={<CalendarCheck2 className="size-5" />}
-              title="Calendário real"
-              text="Cada mês com seus dias certinhos, fins de semana e o dia de hoje em destaque."
-            />
-            <Feature
-              icon={<TrendingUp className="size-5" />}
-              title="Progresso visível"
-              text="Barra de progresso, marcos de 25% a 100% e quanto falta por dia."
-            />
-            <Feature
-              icon={<Target className="size-5" />}
-              title="Mais de uma meta"
-              text="Além da meta principal, crie outras, como viagem, reserva ou presente, cada uma com seu valor diário."
-            />
-            <Feature
-              icon={<Coins className="size-5" />}
-              title="Real, dólar ou euro"
-              text="Escolha a moeda nas configurações e os valores aparecem formatados do jeito certo."
-            />
-            <Feature
-              icon={<RefreshCw className="size-5" />}
-              title="Nenhum toque se perde"
-              text="Se a conexão falhar, o dia fica guardado no aparelho e é enviado de novo até a conta confirmar."
-            />
-            <Feature
-              icon={<Moon className="size-5" />}
-              title="Tema claro ou escuro"
-              text="Use o visual que for melhor para seus olhos, ou deixe seguir o do seu aparelho."
-            />
+          <div className="@container mt-12">
+            <div className="grid gap-4 @2xl:grid-cols-6">
+              <BentoCell
+                className="@2xl:col-span-3 @2xl:row-span-2"
+                icon={<CalendarCheck2 className="size-5" />}
+                title="Calendário real"
+                text="Cada mês com seus dias certinhos, fins de semana e o dia de hoje em destaque."
+              >
+                <MiniCalendar />
+              </BentoCell>
+              <BentoCell
+                className="@2xl:col-span-3"
+                icon={<TrendingUp className="size-5" />}
+                title="Progresso visível"
+                text="Barra de progresso, marcos de 25% a 100% e quanto falta por dia."
+              >
+                <div aria-hidden="true" className="mt-5 h-2.5 overflow-hidden rounded-full bg-secondary">
+                  <div className="bg-progress h-full w-2/3 rounded-full" />
+                </div>
+              </BentoCell>
+              <BentoCell
+                className="@2xl:col-span-3"
+                icon={<Target className="size-5" />}
+                title="Mais de uma meta"
+                text="Além da meta principal, crie outras, como viagem, reserva ou presente, cada uma com seu valor diário."
+              >
+                <div aria-hidden="true" className="mt-5 flex flex-wrap gap-2">
+                  {["Viagem", "Reserva", "Presente"].map((g) => (
+                    <span
+                      key={g}
+                      className="rounded-full border border-border bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground"
+                    >
+                      {g}
+                    </span>
+                  ))}
+                </div>
+              </BentoCell>
+              <BentoCell
+                className="@2xl:col-span-2"
+                icon={<Coins className="size-5" />}
+                title="Real, dólar ou euro"
+                text="Escolha a moeda nas configurações e os valores aparecem formatados do jeito certo."
+              >
+                <div aria-hidden="true" className="mt-5 flex gap-2">
+                  {CURRENCIES.map((c) => (
+                    <span
+                      key={c.code}
+                      className="rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary"
+                    >
+                      {c.symbol}
+                    </span>
+                  ))}
+                </div>
+              </BentoCell>
+              <BentoCell
+                className="@2xl:col-span-2"
+                icon={<RefreshCw className="size-5" />}
+                title="Nenhum toque se perde"
+                text="Se a conexão falhar, o dia fica guardado no aparelho e é enviado de novo até a conta confirmar."
+              />
+              <BentoCell
+                className="@2xl:col-span-2"
+                icon={<Moon className="size-5" />}
+                title="Tema claro ou escuro"
+                text="Use o visual que for melhor para seus olhos. Experimente agora:"
+              >
+                <div className="mt-4">
+                  <ThemeToggle labeled />
+                </div>
+              </BentoCell>
+            </div>
           </div>
         </section>
 
         {/* Simulador */}
         <section
           id="simulador"
-          className="scroll-mt-8 grid items-center gap-10 border-t border-border py-16 lg:grid-cols-[0.9fr_1.1fr]"
+          className="grid scroll-mt-24 items-center gap-10 border-t border-border py-20 lg:grid-cols-[0.9fr_1.1fr]"
         >
           <div>
-            <h2 className="font-display max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h2 className="font-display max-w-md text-4xl font-extrabold tracking-tight sm:text-5xl">
               Quanto dá para juntar guardando um pouco por dia?
             </h2>
-            <p className="mt-3 max-w-md leading-relaxed text-muted-foreground">
+            <p className="mt-4 max-w-md leading-relaxed text-muted-foreground">
               Arraste o valor diário e veja o total no mês e no ano. É só a soma
               dos seus depósitos, sem rendimento.
             </p>
@@ -211,52 +296,64 @@ function Landing() {
         {/* Conquistas */}
         <section
           aria-labelledby="conquistas-titulo"
-          className="my-4 rounded-2xl bg-primary px-6 py-12 text-primary-foreground sm:px-12"
+          className="relative my-4 overflow-hidden rounded-[2rem] bg-primary px-6 py-14 text-primary-foreground sm:px-12"
         >
-          <div className="flex items-center gap-3">
-            <Trophy className="size-6" />
-            <h2
-              id="conquistas-titulo"
-              className="font-display text-3xl font-semibold tracking-tight sm:text-4xl"
-            >
-              Cada marco ganha uma conquista
-            </h2>
+          <div
+            aria-hidden="true"
+            className="absolute -right-16 -top-16 size-64 rounded-full bg-accent/30 blur-3xl"
+          />
+          <div className="relative">
+            <div className="flex items-center gap-3">
+              <Trophy className="size-7" />
+              <h2
+                id="conquistas-titulo"
+                className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl"
+              >
+                Cada marco ganha uma conquista
+              </h2>
+            </div>
+            <p className="mt-4 max-w-xl text-primary-foreground/80">
+              Do primeiro depósito ao trimestre batendo a meta, o app reconhece o
+              que você já construiu.
+            </p>
+            <ul className="mt-10 grid gap-x-10 gap-y-3 sm:grid-cols-2">
+              {[
+                ["Primeiro passo", "Marque seu primeiro depósito."],
+                ["Semana firme", "Guarde 7 dias seguidos."],
+                ["Quinzena de ferro", "Guarde 15 dias seguidos."],
+                ["Mês perfeito", "Marque todos os dias de um mês."],
+                ["Meta batida", "Alcance a meta em um mês."],
+                ["Trimestre de ouro", "Alcance a meta em 3 meses."],
+                ["Planos diversos", "Tenha mais de uma meta ativa."],
+              ].map(([title, text]) => (
+                <li
+                  key={title}
+                  className="flex items-start gap-3 border-t border-primary-foreground/20 pt-3"
+                >
+                  <Check className="mt-0.5 size-4 shrink-0" strokeWidth={3} />
+                  <span>
+                    <span className="font-semibold">{title}.</span>{" "}
+                    <span className="text-primary-foreground/80">{text}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
-          <p className="mt-3 max-w-xl text-primary-foreground/80">
-            Do primeiro depósito ao trimestre batendo a meta, o app reconhece o
-            que você já construiu.
-          </p>
-          <ul className="mt-8 grid gap-x-8 gap-y-3 sm:grid-cols-2">
-            {[
-              ["Primeiro passo", "Marque seu primeiro depósito."],
-              ["Semana firme", "Guarde 7 dias seguidos."],
-              ["Quinzena de ferro", "Guarde 15 dias seguidos."],
-              ["Mês perfeito", "Marque todos os dias de um mês."],
-              ["Meta batida", "Alcance a meta em um mês."],
-              ["Trimestre de ouro", "Alcance a meta em 3 meses."],
-              ["Planos diversos", "Tenha mais de uma meta ativa."],
-            ].map(([title, text]) => (
-              <li key={title} className="flex items-start gap-3 border-t border-primary-foreground/20 pt-3">
-                <Check className="mt-0.5 size-4 shrink-0" strokeWidth={3} />
-                <span>
-                  <span className="font-semibold">{title}.</span>{" "}
-                  <span className="text-primary-foreground/80">{text}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
         </section>
 
         {/* Segurança + FAQ */}
-        <section id="perguntas" className="scroll-mt-8 grid gap-10 py-16 lg:grid-cols-[0.8fr_1.2fr]">
+        <section
+          id="perguntas"
+          className="grid scroll-mt-24 gap-10 py-20 lg:grid-cols-[0.8fr_1.2fr]"
+        >
           <div>
-            <div className="mb-4 grid size-10 place-items-center rounded-full bg-primary/10 text-primary">
+            <div className="mb-4 grid size-11 place-items-center rounded-2xl bg-primary/10 text-primary">
               <ShieldCheck className="size-5" />
             </div>
-            <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h2 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
               Perguntas frequentes
             </h2>
-            <p className="mt-3 max-w-sm text-muted-foreground">
+            <p className="mt-4 max-w-sm text-muted-foreground">
               Entre com e-mail, Google ou Lovable. Seus dados ficam na sua
               conta, e ninguém mais vê seus depósitos.
             </p>
@@ -291,15 +388,15 @@ function Landing() {
         </section>
 
         {/* CTA final */}
-        <section className="mb-8 rounded-2xl border border-border bg-card px-6 py-12 text-center shadow-panel sm:px-12">
-          <h2 className="font-display mx-auto max-w-xl text-3xl font-semibold tracking-tight sm:text-4xl">
+        <section className="glow-border shadow-panel mb-16 rounded-[2rem] px-6 py-14 text-center sm:px-12">
+          <h2 className="font-display mx-auto max-w-2xl text-4xl font-extrabold tracking-tight sm:text-5xl">
             Comece o mês de hoje com o primeiro dia marcado
           </h2>
-          <p className="mx-auto mt-3 max-w-md text-muted-foreground">
+          <p className="mx-auto mt-4 max-w-md text-muted-foreground">
             Crie sua conta, defina a meta e marque o primeiro depósito.
           </p>
-          <Link to="/auth" className="mt-7 inline-block">
-            <Button className="h-12 px-7 text-base font-bold">
+          <Link to="/auth" className="mt-8 inline-block">
+            <Button className="h-12 rounded-full px-8 text-base font-bold shadow-card">
               Criar minha conta
               <ArrowRight className="size-4" />
             </Button>
@@ -307,9 +404,127 @@ function Landing() {
         </section>
       </main>
 
-      <footer className="mx-auto w-full max-w-5xl border-t border-border pt-5 text-center text-xs text-muted-foreground">
-        Minha Meta Mensal. Construa o hábito de guardar.
+      <footer className="border-t border-border bg-card/60 px-4 py-10 sm:px-8">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
+          <div className="max-w-xs">
+            <div className="flex items-center gap-2 text-primary">
+              <Target className="size-5" strokeWidth={2.5} />
+              <span className="font-display text-lg font-extrabold">Minha Meta Mensal</span>
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Construa o hábito de guardar, um dia de cada vez.
+            </p>
+          </div>
+          <nav aria-label="Rodapé" className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
+            {NAV.map((n) => (
+              <a
+                key={n.href}
+                href={n.href}
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {n.label}
+              </a>
+            ))}
+            <Link to="/auth" className="text-primary hover:underline">
+              Entrar
+            </Link>
+          </nav>
+        </div>
       </footer>
+    </div>
+  );
+}
+
+function ThemeToggle({ labeled = false }: { labeled?: boolean }) {
+  const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    setDark(document.documentElement.classList.contains("dark"));
+  }, []);
+
+  const toggle = () => {
+    const next = !dark;
+    try {
+      applyTheme(next ? "dark" : "light");
+    } catch {
+      document.documentElement.classList.toggle("dark", next);
+    }
+    setDark(next);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={dark ? "Mudar para o tema claro" : "Mudar para o tema escuro"}
+      className={
+        "inline-flex cursor-pointer items-center gap-2 rounded-full border border-border bg-secondary text-sm font-semibold text-secondary-foreground transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+        (labeled ? "px-4 py-2" : "size-9 justify-center")
+      }
+    >
+      {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+      {labeled ? (dark ? "Tema claro" : "Tema escuro") : null}
+    </button>
+  );
+}
+
+function BentoCell({
+  className = "",
+  icon,
+  title,
+  text,
+  children,
+}: {
+  className?: string;
+  icon: ReactNode;
+  title: string;
+  text: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      className={
+        "reveal flex flex-col rounded-3xl border border-border bg-card p-6 shadow-card transition-colors hover:border-primary/40 " +
+        className
+      }
+    >
+      <div className="mb-4 grid size-11 place-items-center rounded-2xl bg-primary/10 text-primary">
+        {icon}
+      </div>
+      <h3 className="font-display text-xl font-extrabold tracking-tight">{title}</h3>
+      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{text}</p>
+      {children}
+    </div>
+  );
+}
+
+function MiniCalendar() {
+  // Decorative: a month grid with the first stretch of days already marked.
+  return (
+    <div aria-hidden="true" className="mt-6 grid max-w-sm grid-cols-7 gap-1.5">
+      {Array.from({ length: 35 }, (_, i) => {
+        const day = i + 1;
+        const done = day <= 18 && day % 6 !== 0;
+        const today = day === 19;
+        return (
+          <div
+            key={i}
+            className={
+              "grid aspect-square place-items-center rounded-lg text-[11px] font-bold tabular-nums " +
+              (day > 31
+                ? "invisible "
+                : "") +
+              (done
+                ? "bg-primary text-primary-foreground"
+                : today
+                  ? "border-2 border-accent bg-card text-foreground"
+                  : "bg-secondary text-muted-foreground")
+            }
+          >
+            {day <= 31 ? day : ""}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -320,25 +535,25 @@ const DEMO_VALUES = [10, 20, 50];
 
 function Simulator() {
   const [daily, setDaily] = useState(15);
-  const month = daily * 30;
-  const year = daily * 365;
+  const month = useAnimatedNumber(daily * 30);
+  const year = useAnimatedNumber(daily * 365);
   const daysToThousand = Math.ceil(1000 / daily);
 
   return (
-    <div className="shadow-panel rounded-2xl border border-border bg-card p-5 sm:p-6">
+    <div className="shadow-panel rounded-3xl border border-border bg-card p-6 sm:p-8">
       <div className="flex items-baseline justify-between gap-4">
         <label htmlFor="simulador-valor" className="text-sm font-semibold text-muted-foreground">
           Valor guardado por dia
         </label>
         <output
           id="simulador-valor"
-          className="font-display text-3xl font-semibold tabular-nums tracking-tight"
+          className="font-display text-4xl font-extrabold tabular-nums tracking-tight"
         >
           {formatMoney(daily)}
         </output>
       </div>
       <Slider
-        className="mt-5"
+        className="mt-6"
         min={1}
         max={100}
         step={1}
@@ -346,22 +561,26 @@ function Simulator() {
         onValueChange={(v) => setDaily(v[0] ?? 1)}
         aria-label="Valor guardado por dia"
       />
-      <div className="mt-1.5 flex justify-between text-[11px] font-semibold tabular-nums text-muted-foreground">
+      <div className="mt-2 flex justify-between text-[11px] font-semibold tabular-nums text-muted-foreground">
         <span>{formatMoney(1)}</span>
         <span>{formatMoney(100)}</span>
       </div>
 
-      <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-5">
+      <dl className="mt-7 grid grid-cols-2 gap-4 border-t border-border pt-6">
         <div>
           <dt className="text-sm text-muted-foreground">Em 30 dias</dt>
-          <dd className="font-display text-2xl font-semibold tabular-nums">{formatMoney(month)}</dd>
+          <dd className="font-display text-3xl font-extrabold tabular-nums tracking-tight">
+            {formatMoney(Math.round(month))}
+          </dd>
         </div>
         <div>
           <dt className="text-sm text-muted-foreground">Em 1 ano</dt>
-          <dd className="font-display text-2xl font-semibold tabular-nums">{formatMoney(year)}</dd>
+          <dd className="font-display text-3xl font-extrabold tabular-nums tracking-tight">
+            {formatMoney(Math.round(year))}
+          </dd>
         </div>
       </dl>
-      <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">
+      <p className="mt-5 text-sm text-muted-foreground" aria-live="polite">
         {daysToThousand === 1
           ? `Você chega a ${formatMoney(1000)} em 1 dia.`
           : `Você chega a ${formatMoney(1000)} em ${daysToThousand} dias.`}
@@ -378,6 +597,7 @@ function ChallengeDemo() {
   const goal = DEMO_DAYS * daily;
   const count = done.filter(Boolean).length;
   const saved = count * daily;
+  const animatedSaved = useAnimatedNumber(saved);
   const pct = Math.round((saved / goal) * 100);
   const remaining = DEMO_DAYS - count;
 
@@ -386,15 +606,29 @@ function ChallengeDemo() {
   const reset = () => setDone(Array.from({ length: DEMO_DAYS }, (_, i) => i < DEMO_START));
 
   return (
-    <div className="shadow-panel rounded-2xl border border-border bg-card p-5 sm:p-6">
+    <div className="glow-border shadow-panel relative overflow-hidden rounded-3xl p-5 sm:p-7">
+      {remaining === 0 &&
+        Array.from({ length: 16 }, (_, i) => {
+          const angle = (i / 16) * Math.PI * 2;
+          const dist = 110 + (i % 4) * 36;
+          const style = {
+            "--x": `${Math.round(Math.cos(angle) * dist)}px`,
+            "--y": `${Math.round(Math.sin(angle) * dist - 40)}px`,
+            "--r": `${(i % 2 ? 1 : -1) * (120 + i * 25)}deg`,
+            background: i % 2 ? "var(--accent)" : "var(--primary)",
+            animationDelay: `${(i % 5) * 40}ms`,
+          } as CSSProperties;
+          return <span key={i} aria-hidden="true" className="confetti" style={style} />;
+        })}
+
       <div className="flex items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-muted-foreground">Guardado neste desafio</p>
-          <p className="font-display text-4xl font-semibold tabular-nums tracking-tight">
-            {formatMoney(saved)}
+          <p className="font-display text-5xl font-extrabold tabular-nums tracking-tight">
+            {formatMoney(Math.round(animatedSaved))}
           </p>
         </div>
-        <p className="pb-1 text-right text-sm text-muted-foreground">
+        <p className="pb-1.5 text-right text-sm text-muted-foreground">
           meta de {formatMoney(goal)}
         </p>
       </div>
@@ -429,10 +663,10 @@ function ChallengeDemo() {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={pct}
-        className="mt-4 h-3 overflow-hidden rounded-full bg-secondary"
+        className="mt-5 h-3 overflow-hidden rounded-full bg-secondary"
       >
         <div
-          className="bg-progress h-full rounded-full transition-[width] duration-300 ease-out"
+          className="bg-progress h-full rounded-full transition-[width] duration-500 ease-out"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -453,9 +687,9 @@ function ChallengeDemo() {
             aria-label={`Dia ${i + 1}`}
             onClick={() => toggle(i)}
             className={
-              "grid aspect-square cursor-pointer place-items-center rounded-lg text-sm font-bold tabular-nums transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-90 " +
+              "grid aspect-square cursor-pointer place-items-center rounded-xl text-sm font-bold tabular-nums transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-90 " +
               (isDone
-                ? "bg-primary text-primary-foreground"
+                ? "bg-primary text-primary-foreground shadow-sm"
                 : "bg-secondary text-secondary-foreground hover:bg-primary/15")
             }
           >
@@ -464,7 +698,7 @@ function ChallengeDemo() {
         ))}
       </div>
 
-      <div className="mt-4 flex items-start justify-between gap-3">
+      <div className="mt-5 flex items-start justify-between gap-3">
         <p className="text-sm text-muted-foreground" aria-live="polite">
           {remaining === 0
             ? "Meta batida! Todos os dias foram marcados."
@@ -473,7 +707,7 @@ function ChallengeDemo() {
         <button
           type="button"
           onClick={reset}
-          className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <RotateCcw className="size-3.5" />
           Reiniciar
@@ -485,32 +719,16 @@ function ChallengeDemo() {
 
 function Step({ n, title, text }: { n: string; title: string; text: string }) {
   return (
-    <li className="flex gap-4">
+    <li className="reveal relative">
       <span
         aria-hidden="true"
-        className="font-display text-5xl font-semibold leading-none text-primary/30"
+        className="font-display relative grid size-12 place-items-center rounded-full border-2 border-primary bg-background text-xl font-extrabold text-primary"
       >
         {n}
       </span>
-      <div>
-        <h3 className="font-display text-xl font-semibold">{title}</h3>
-        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{text}</p>
-      </div>
+      <h3 className="font-display mt-5 text-2xl font-extrabold tracking-tight">{title}</h3>
+      <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">{text}</p>
     </li>
-  );
-}
-
-function Feature({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
-  return (
-    <div className="flex gap-4 border-t border-border pt-5">
-      <div className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-        {icon}
-      </div>
-      <div>
-        <h3 className="font-display text-lg font-semibold">{title}</h3>
-        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{text}</p>
-      </div>
-    </div>
   );
 }
 
