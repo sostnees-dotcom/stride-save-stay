@@ -24,6 +24,7 @@ import {
 
 import { Confetti } from "@/components/confetti";
 import { InsightsPanel } from "@/components/insights-panel";
+import { PlannerPanel } from "@/components/planner-panel";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -441,6 +442,35 @@ export function App() {
     void flush(userId);
   };
 
+  // Undo for the last change to the days of the month on screen. It restores the previous
+  // state through the same `persist` path, so saving and retries behave exactly as before.
+  const undoRef = useRef<{ key: string; prev: boolean[] } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [undoLabel, setUndoLabel] = useState<string | null>(null);
+  useEffect(() => () => clearTimeout(undoTimer.current), []);
+  useEffect(() => {
+    // Switching month or goal makes the pending undo meaningless.
+    undoRef.current = null;
+    setUndoLabel(null);
+  }, [key]);
+  const rememberUndo = (prev: boolean[], label: string) => {
+    undoRef.current = { key, prev };
+    setUndoLabel(label);
+    clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => {
+      undoRef.current = null;
+      setUndoLabel(null);
+    }, 6000);
+  };
+  const undo = () => {
+    const last = undoRef.current;
+    if (!last || last.key !== key) return;
+    clearTimeout(undoTimer.current);
+    undoRef.current = null;
+    setUndoLabel(null);
+    persist(last.prev);
+  };
+
   // Retry pending saves when the connection returns or the tab is hidden,
   // and warn before closing the page with unsaved days.
   useEffect(() => {
@@ -568,6 +598,7 @@ export function App() {
   // Read the latest state (not the render snapshot) so quick taps never drop a day.
   const toggle = (i: number) => {
     const current = normalize(progressRef.current[key], days);
+    rememberUndo(current, `Dia ${i + 1} ${current[i] ? "desmarcado" : "marcado"}.`);
     persist(current.map((c, j) => (j === i ? !c : c)));
     setPopIdx(i);
     clearTimeout(popTimer.current);
@@ -582,6 +613,7 @@ export function App() {
   // Catch up: marks every day up to today as deposited (never unmarks anything).
   const markUntilToday = () => {
     const current = normalize(progressRef.current[key], days);
+    rememberUndo(current, "Dias até hoje marcados.");
     persist(current.map((c, j) => c || j < todayDate));
   };
 
@@ -884,6 +916,20 @@ export function App() {
             />
           )}
 
+          <PlannerPanel
+            today={{ y: NOW.getFullYear(), m: NOW.getMonth() + 1, d: todayDate }}
+            daysInMonth={days}
+            currentDaily={settings.dailyValue}
+            money={money}
+            onApply={(g, d) => {
+              setGoalIn(String(g));
+              setDailyIn(String(d));
+              const field = document.getElementById("goal");
+              field?.scrollIntoView({ behavior: "smooth", block: "center" });
+              (field as HTMLInputElement | null)?.focus({ preventScroll: true });
+            }}
+          />
+
           <div className="mb-5 mt-8 flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold">Calendário de depósitos</h2>
@@ -1042,6 +1088,19 @@ export function App() {
         </section>
       </main>
 
+      {undoLabel && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
+          <div
+            role="status"
+            className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-card py-2 pl-5 pr-2 text-sm font-semibold shadow-card"
+          >
+            <span>{undoLabel}</span>
+            <Button type="button" variant="outline" className="h-8 rounded-full px-4 font-bold" onClick={undo}>
+              Desfazer
+            </Button>
+          </div>
+        </div>
+      )}
       {milestone === 100 && (
         <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-40">
           <Confetti count={22} />
