@@ -9,6 +9,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Flame,
   Loader2,
   LogOut,
   Moon,
@@ -21,6 +22,7 @@ import {
   Wallet,
 } from "lucide-react";
 
+import { Confetti } from "@/components/confetti";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -31,6 +33,7 @@ import {
   progressKey,
   type GoalInfo,
 } from "@/lib/goals";
+import { useAnimatedNumber } from "@/lib/use-animated-number";
 
 export const Route = createFileRoute("/_authenticated/app")({
   head: () => ({
@@ -163,6 +166,10 @@ export function App() {
   const prevProgress = useRef(0);
   const lastMonth = useRef(monthKey(NOW.getFullYear(), NOW.getMonth()));
   const stripRef = useRef<HTMLDivElement>(null);
+  // Which day just changed, so only that coin plays the "pop" animation.
+  const [popIdx, setPopIdx] = useState<number | null>(null);
+  const popTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(popTimer.current), []);
 
   const days = daysIn(year, month);
   const key = progressKey(activeExtra ? activeGoal : MAIN_GOAL, monthKey(year, month));
@@ -341,6 +348,7 @@ export function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
     localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+    localStorage.setItem("monthlyGoalThemePref", dark ? "dark" : "light");
   }, [dark]);
 
   const completed = useMemo(
@@ -466,8 +474,28 @@ export function App() {
   const perDayNeeded = daysLeft > 0 ? remaining / daysLeft : 0;
   const nextDay = completed.findIndex((c) => !c);
 
+  // Current streak: in the running month it ends today (or yesterday, so an
+  // unmarked today doesn't break it yet); in other months it ends on the last day.
   let streak = 0;
-  for (let i = days - 1; i >= 0 && completed[i]; i--) streak++;
+  {
+    let i = days - 1;
+    if (isCurrentMonth) {
+      i = Math.min(todayDate, days) - 1;
+      if (!completed[i]) i--;
+    }
+    for (; i >= 0 && completed[i]; i--) streak++;
+  }
+  let bestRun = 0;
+  for (let i = 0, run = 0; i < days; i++) {
+    run = completed[i] ? run + 1 : 0;
+    if (run > bestRun) bestRun = run;
+  }
+  const animatedSaved = useAnimatedNumber(saved);
+  // Where the month lands if the pace so far continues (running month only).
+  const projectedDays =
+    isCurrentMonth && done > 0 ? Math.min(days, Math.round((done / todayDate) * days)) : 0;
+  const projected = projectedDays * settings.dailyValue;
+  const unmarkedUntilToday = isCurrentMonth && completed.slice(0, todayDate).some((c) => !c);
 
   useEffect(() => {
     const changed = lastMonth.current !== key;
@@ -540,6 +568,20 @@ export function App() {
   const toggle = (i: number) => {
     const current = normalize(progressRef.current[key], days);
     persist(current.map((c, j) => (j === i ? !c : c)));
+    setPopIdx(i);
+    clearTimeout(popTimer.current);
+    popTimer.current = setTimeout(() => setPopIdx(null), 450);
+    try {
+      navigator.vibrate?.(8);
+    } catch {
+      // Haptics are optional.
+    }
+  };
+
+  // Catch up: marks every day up to today as deposited (never unmarks anything).
+  const markUntilToday = () => {
+    const current = normalize(progressRef.current[key], days);
+    persist(current.map((c, j) => c || j < todayDate));
   };
 
   const signOut = async () => {
@@ -772,12 +814,12 @@ export function App() {
           )}
 
           <div className="my-8 grid grid-cols-2 gap-x-5 gap-y-6 lg:grid-cols-4">
-            <Stat label="Já guardado" value={money(saved)} highlight />
+            <Stat label="Já guardado" value={money(animatedSaved)} highlight />
             <Stat label="Falta guardar" value={money(remaining)} />
             <Stat label="Dias concluídos" value={`${done} de ${days}`} />
             <Stat
-              label={daysLeft > 0 ? "Por dia restante" : "Sequência final"}
-              value={daysLeft > 0 ? money(perDayNeeded) : `${streak} dias`}
+              label={daysLeft > 0 ? "Por dia restante" : "Melhor sequência"}
+              value={daysLeft > 0 ? money(perDayNeeded) : `${bestRun} dias`}
               hint={streak > 1 ? `Sequência: ${streak} dias` : undefined}
             />
           </div>
@@ -819,6 +861,12 @@ export function App() {
             <p className="mt-4 text-sm font-semibold text-muted-foreground">
               {motivational(progress)}
             </p>
+            {projectedDays > 0 && daysLeft > 0 && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Mantendo o ritmo até aqui, você fecha o mês com {money(projected)}
+                {projected >= settings.goal ? " e bate a meta." : "."}
+              </p>
+            )}
           </div>
 
           <div className="mb-5 mt-8 flex flex-wrap items-end justify-between gap-4">
@@ -857,6 +905,21 @@ export function App() {
             )}
           </div>
 
+          <div className="mb-4 flex flex-wrap gap-2">
+            <InfoChip
+              icon={<Flame className="size-4" />}
+              label="Sequência atual"
+              value={`${streak} ${streak === 1 ? "dia" : "dias"}`}
+              active={streak > 0}
+            />
+            <InfoChip
+              icon={<Trophy className="size-4" />}
+              label="Melhor do mês"
+              value={`${bestRun} ${bestRun === 1 ? "dia" : "dias"}`}
+              active={bestRun > 0}
+            />
+          </div>
+
           <div className="mb-2 grid grid-cols-7 gap-1.5 sm:gap-2">
             {WEEKDAYS.map((w) => (
               <span
@@ -877,36 +940,44 @@ export function App() {
               const weekend = weekday === 0 || weekday === 6;
               const isToday = isCurrentMonth && i + 1 === todayDate;
               return (
-                <Button
-                  key={i}
-                  variant="outline"
-                  type="button"
-                  onClick={() => toggle(i)}
-                  aria-label={`${i + 1} de ${MONTHS[month]}, ${money(settings.dailyValue)}`}
-                  aria-pressed={c}
-                  className={`relative flex h-16 flex-col items-center justify-center rounded-lg border p-1 shadow-none transition-all duration-150 active:scale-95 sm:h-20 ${
-                    c
-                      ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
-                      : isToday
-                        ? "border-accent bg-accent/10 text-foreground"
-                        : i === nextDay
-                          ? "border-primary bg-background text-foreground ring-2 ring-ring/30"
-                          : weekend
-                            ? "border-border bg-muted/40 text-muted-foreground hover:border-primary/50 hover:bg-secondary"
-                            : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-secondary"
-                  }`}
+                // Remounting on month/goal change replays the staggered entrance.
+                <span
+                  key={`${key}-${i}`}
+                  className="cell-in grid place-items-center"
+                  style={{ animationDelay: `${Math.min(i * 14, 420)}ms` }}
                 >
-                  <Check
-                    className={`absolute right-1.5 top-1.5 size-3 transition-all duration-200 ${
-                      c ? "scale-100 opacity-100" : "scale-50 opacity-0"
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => toggle(i)}
+                    aria-label={`${i + 1} de ${MONTHS[month]}, ${money(settings.dailyValue)}`}
+                    aria-pressed={c}
+                    className={`relative flex aspect-square h-auto w-full max-w-[5.5rem] flex-col items-center justify-center gap-0 rounded-full border p-1 shadow-none transition-all duration-150 active:scale-90 ${
+                      popIdx === i ? "coin-pop" : ""
+                    } ${i === nextDay && !c ? "pulse-ring" : ""} ${
+                      c
+                        ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                        : isToday
+                          ? "border-accent bg-accent/10 text-foreground"
+                          : i === nextDay
+                            ? "border-primary bg-background text-foreground ring-2 ring-ring/30"
+                            : weekend
+                              ? "border-border bg-muted/40 text-muted-foreground hover:border-primary/50 hover:bg-secondary"
+                              : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-secondary"
                     }`}
-                    strokeWidth={3}
-                  />
-                  <span className="text-sm font-extrabold sm:text-base">{i + 1}</span>
-                  <span className="hidden text-[0.6rem] font-bold opacity-70 sm:block">
-                    {money(settings.dailyValue)}
-                  </span>
-                </Button>
+                  >
+                    <Check
+                      className={`absolute left-1/2 top-[13%] size-3 -translate-x-1/2 transition-all duration-200 ${
+                        c ? "scale-100 opacity-100" : "scale-50 opacity-0"
+                      }`}
+                      strokeWidth={3}
+                    />
+                    <span className="text-sm font-extrabold sm:text-base">{i + 1}</span>
+                    <span className="hidden text-[0.6rem] font-bold opacity-70 sm:block">
+                      {money(settings.dailyValue)}
+                    </span>
+                  </Button>
+                </span>
               );
             })}
           </div>
@@ -917,10 +988,23 @@ export function App() {
                 <Wallet className="size-4" />
                 Próximo depósito: dia {nextDay + 1} de {MONTHS[month]}
               </span>
-              <Button onClick={() => toggle(nextDay)} className="h-10 font-semibold">
-                Guardar {money(settings.dailyValue)}
-                <ArrowUpRight />
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {unmarkedUntilToday && (
+                  <Button
+                    variant="outline"
+                    onClick={markUntilToday}
+                    title="Marca todos os dias até hoje como depositados"
+                    className="h-10 font-semibold"
+                  >
+                    <Check />
+                    Marcar dias até hoje
+                  </Button>
+                )}
+                <Button onClick={() => toggle(nextDay)} className="h-10 font-semibold">
+                  Guardar {money(settings.dailyValue)}
+                  <ArrowUpRight />
+                </Button>
+              </div>
             </div>
           )}
 
@@ -943,6 +1027,11 @@ export function App() {
         </section>
       </main>
 
+      {milestone === 100 && (
+        <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-40">
+          <Confetti count={22} />
+        </div>
+      )}
       {milestone !== null && (
         <div className="pointer-events-none fixed inset-x-0 top-6 z-50 flex justify-center px-4">
           <div className="flex items-center gap-2 rounded-full border border-border bg-card px-5 py-2.5 text-sm font-bold text-primary shadow-card">
@@ -986,6 +1075,32 @@ function Field({
         />
       </div>
     </div>
+  );
+}
+
+function InfoChip({
+  icon,
+  label,
+  value,
+  active,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  active: boolean;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+        active
+          ? "border-accent/50 bg-accent/10 text-foreground"
+          : "border-border bg-card text-muted-foreground"
+      }`}
+    >
+      <span className={active ? "text-accent" : ""}>{icon}</span>
+      <span className="text-muted-foreground">{label}</span>
+      <strong className="font-bold tabular-nums">{value}</strong>
+    </span>
   );
 }
 

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   ArrowRight,
   CalendarCheck2,
@@ -21,11 +21,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Confetti } from "@/components/confetti";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { applyTheme } from "@/lib/goal-data";
 import { CURRENCIES, formatMoney } from "@/lib/goals";
+import { useAnimatedNumber } from "@/lib/use-animated-number";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -57,36 +59,6 @@ const NAV = [
 
 const navLink =
   "rounded-full px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
-/** Animates a number toward its target (instant when the user prefers reduced motion). */
-function useAnimatedNumber(target: number, ms = 380) {
-  const [value, setValue] = useState(target);
-  const from = useRef(target);
-
-  useEffect(() => {
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      from.current = target;
-      setValue(target);
-      return;
-    }
-    const start = performance.now();
-    const origin = from.current;
-    let raf = 0;
-    const tick = (now: number) => {
-      const p = Math.min(1, (now - start) / ms);
-      const eased = 1 - Math.pow(1 - p, 3);
-      const current = origin + (target - origin) * eased;
-      from.current = current;
-      setValue(current);
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, ms]);
-
-  return value;
-}
 
 function Landing() {
   const navigate = useNavigate();
@@ -607,19 +579,7 @@ function ChallengeDemo() {
 
   return (
     <div className="glow-border shadow-panel relative overflow-hidden rounded-3xl p-5 sm:p-7">
-      {remaining === 0 &&
-        Array.from({ length: 16 }, (_, i) => {
-          const angle = (i / 16) * Math.PI * 2;
-          const dist = 110 + (i % 4) * 36;
-          const style = {
-            "--x": `${Math.round(Math.cos(angle) * dist)}px`,
-            "--y": `${Math.round(Math.sin(angle) * dist - 40)}px`,
-            "--r": `${(i % 2 ? 1 : -1) * (120 + i * 25)}deg`,
-            background: i % 2 ? "var(--accent)" : "var(--primary)",
-            animationDelay: `${(i % 5) * 40}ms`,
-          } as CSSProperties;
-          return <span key={i} aria-hidden="true" className="confetti" style={style} />;
-        })}
+      {remaining === 0 && <Confetti count={16} />}
 
       <div className="flex items-end justify-between gap-4">
         <div>
