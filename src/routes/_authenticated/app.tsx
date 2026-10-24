@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { Confetti } from "@/components/confetti";
+import { InsightsPanel } from "@/components/insights-panel";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -868,6 +869,20 @@ export function App() {
               </p>
             )}
           </div>
+
+          {isCurrentMonth && (
+            <InsightsPanel
+              input={{
+                completed,
+                year,
+                month,
+                today: todayDate,
+                dailyValue: settings.dailyValue,
+                goal: settings.goal,
+                money,
+              }}
+            />
+          )}
 
           <div className="mb-5 mt-8 flex flex-wrap items-end justify-between gap-4">
             <div>
