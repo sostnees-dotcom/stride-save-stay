@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowRight,
   CalendarCheck2,
   Check,
   Coins,
+  Cpu,
   Moon,
   RefreshCw,
   RotateCcw,
@@ -22,11 +23,13 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Confetti } from "@/components/confetti";
+import { InsightRow } from "@/components/insights-panel";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { applyTheme } from "@/lib/goal-data";
 import { CURRENCIES, formatMoney } from "@/lib/goals";
+import { computeInsights } from "@/lib/insights";
 import { useAnimatedNumber } from "@/lib/use-animated-number";
 
 export const Route = createFileRoute("/")({
@@ -54,6 +57,7 @@ const NAV = [
   { href: "#como-funciona", label: "Como funciona" },
   { href: "#recursos", label: "Recursos" },
   { href: "#simulador", label: "Simulador" },
+  { href: "#analise", label: "Análise" },
   { href: "#perguntas", label: "Perguntas" },
 ];
 
@@ -263,6 +267,24 @@ function Landing() {
             </p>
           </div>
           <Simulator />
+        </section>
+
+        {/* Análise automática */}
+        <section
+          id="analise"
+          className="grid scroll-mt-24 items-center gap-10 border-t border-border py-20 lg:grid-cols-[0.9fr_1.1fr]"
+        >
+          <div>
+            <h2 className="font-display max-w-md text-4xl font-extrabold tracking-tight sm:text-5xl">
+              Seu mês, explicado
+            </h2>
+            <p className="mt-4 max-w-md leading-relaxed text-muted-foreground">
+              O app lê os dias que você marcou e calcula seu ritmo, o risco de
+              não bater a meta e o próximo marco. É conta feita no próprio app,
+              e atualiza a cada toque.
+            </p>
+          </div>
+          <InsightsDemo />
         </section>
 
         {/* Conquistas */}
@@ -673,6 +695,90 @@ function ChallengeDemo() {
           Reiniciar
         </button>
       </div>
+    </div>
+  );
+}
+
+const range = (from: number, to: number) =>
+  Array.from({ length: to - from + 1 }, (_, i) => from + i);
+
+const INSIGHT_SCENARIOS = [
+  { id: "ritmo", label: "No ritmo", marked: [...range(1, 5), ...range(7, 19)], today: 19 },
+  { id: "atraso", label: "Atrasado", marked: [1, 2, 3, 5, 8, 9], today: 19 },
+  { id: "meta", label: "Meta batida", marked: range(1, 25), today: 26 },
+] as const;
+
+function InsightsDemo() {
+  const [scenarioId, setScenarioId] = useState<(typeof INSIGHT_SCENARIOS)[number]["id"]>("ritmo");
+  const scenario = INSIGHT_SCENARIOS.find((s) => s.id === scenarioId) ?? INSIGHT_SCENARIOS[0];
+
+  const insights = useMemo(
+    () =>
+      computeInsights({
+        completed: Array.from({ length: 31 }, (_, i) => scenario.marked.some((d) => d === i + 1)),
+        year: 2026,
+        month: 9,
+        today: scenario.today,
+        dailyValue: 20,
+        goal: 500,
+        money: (v) => formatMoney(v),
+      }),
+    [scenario],
+  );
+
+  return (
+    <div className="scan shadow-panel relative overflow-hidden rounded-3xl border border-primary/30 bg-card p-5 sm:p-7">
+      <div className="flex items-center gap-3">
+        <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary">
+          <Cpu className="size-5" />
+        </span>
+        <p className="text-lg font-bold">Análise automática</p>
+        <span className="ml-auto text-xs font-semibold text-muted-foreground">Exemplo</span>
+      </div>
+
+      <div role="group" aria-label="Cenário do exemplo" className="mt-4 flex flex-wrap gap-2">
+        {INSIGHT_SCENARIOS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            aria-pressed={scenarioId === s.id}
+            onClick={() => setScenarioId(s.id)}
+            className={
+              "cursor-pointer rounded-full border px-3 py-1 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+              (scenarioId === s.id
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-secondary text-secondary-foreground hover:bg-primary/15")
+            }
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      <div aria-hidden="true" className="mt-4 flex flex-wrap gap-1">
+        {Array.from({ length: 31 }, (_, i) => (
+          <span
+            key={i}
+            className={
+              "size-3.5 rounded-full " +
+              (scenario.marked.some((d) => d === i + 1)
+                ? "bg-primary"
+                : i + 1 === scenario.today
+                  ? "border-2 border-accent"
+                  : "bg-secondary")
+            }
+          />
+        ))}
+      </div>
+
+      <ul key={scenarioId} className="mt-5 grid gap-3">
+        {insights.map((item, i) => (
+          <InsightRow key={item.id} item={item} delay={i * 90} />
+        ))}
+      </ul>
+      <p className="mt-4 text-xs text-muted-foreground">
+        Exemplo com meta de {formatMoney(500)} e {formatMoney(20)} por dia.
+      </p>
     </div>
   );
 }

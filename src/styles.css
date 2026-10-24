@@ -264,6 +264,25 @@
   70%, 100% { box-shadow: 0 0 0 12px transparent; }
 }
 
+/* "Control panel" scan line for the automatic analysis card. */
+.scan::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  opacity: 0;
+  animation: scan 5s ease-in-out infinite;
+}
+@keyframes scan {
+  0% { top: 0; opacity: 0; }
+  12% { opacity: 0.5; }
+  88% { opacity: 0.5; }
+  100% { top: calc(100% - 2px); opacity: 0; }
+}
+
 /* Scroll-driven effects: only where the browser supports them. */
 @supports (animation-timeline: scroll()) {
   .scroll-progress {
@@ -311,6 +330,7 @@
   .cell-in,
   .coin-pop,
   .pulse-ring,
+  .scan::after,
   .scroll-progress {
     animation: none !important;
   }
