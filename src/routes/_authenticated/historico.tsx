@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, Lock, Trophy } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Loader2, Lock, Share2, Trophy } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Button } from "@/components/ui/button";
 import { loadAccountData, type AccountData } from "@/lib/goal-data";
+import { buildDepositsCsv, yearSummaryText } from "@/lib/export";
 import { computeAchievements, formatMoney, yearSeries } from "@/lib/goals";
 
 export const Route = createFileRoute("/_authenticated/historico")({
@@ -28,6 +29,7 @@ function HistoryPage() {
   const [failed, setFailed] = useState(false);
   const [goalId, setGoalId] = useState("main");
   const [year, setYear] = useState(() => new Date().getFullYear());
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     loadAccountData().then(setData).catch(() => setFailed(true));
@@ -66,6 +68,50 @@ function HistoryPage() {
   const best = series.reduce((b, x) => (x.saved > b.saved ? x : b), series[0]!);
   const unlocked = achievements.filter((a) => a.unlocked).length;
 
+  const flash = (text: string) => {
+    setNotice(text);
+    setTimeout(() => setNotice(""), 4000);
+  };
+
+  const exportCsv = () => {
+    try {
+      const csv = buildDepositsCsv(data);
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "depositos-minha-meta-mensal.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      flash("Arquivo gerado com todos os seus depósitos.");
+    } catch {
+      flash("Não foi possível gerar o arquivo. Tente novamente.");
+    }
+  };
+
+  const shareSummary = async () => {
+    const text = yearSummaryText({
+      year,
+      total,
+      depositDays: totalDays,
+      monthsReached: reached,
+      money: (v) => formatMoney(v, cur),
+    });
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ text });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      flash("Resumo copiado. É só colar onde quiser.");
+    } catch (e) {
+      // Closing the share sheet is not an error.
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      flash("Não foi possível compartilhar agora.");
+    }
+  };
+
   return (
     <div className="bg-page min-h-screen px-4 py-6 font-sans text-foreground sm:px-8 sm:py-10">
       <main className="mx-auto w-full max-w-5xl">
@@ -86,6 +132,18 @@ function HistoryPage() {
 
         <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Histórico</h1>
         <p className="mt-3 text-muted-foreground">Sua evolução ao longo de {year}.</p>
+
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <Button variant="outline" className="gap-2 rounded-full font-semibold" onClick={exportCsv}>
+            <Download className="size-4" /> Exportar depósitos (CSV)
+          </Button>
+          <Button variant="outline" className="gap-2 rounded-full font-semibold" onClick={shareSummary}>
+            <Share2 className="size-4" /> Compartilhar resumo
+          </Button>
+          <span role="status" aria-live="polite" className="text-sm text-muted-foreground">
+            {notice}
+          </span>
+        </div>
 
         {data.goals.length > 1 && (
           <nav aria-label="Metas" className="mt-6 flex flex-wrap gap-2">
@@ -138,7 +196,39 @@ function HistoryPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">Barras douradas: meses em que a meta foi alcançada.</p>
+          <p className="mt-3 text-xs text-muted-foreground">Barras em coral: meses em que a meta foi alcançada.</p>
+        </section>
+
+        <section className="mt-12" aria-labelledby="detalhe-mensal">
+          <h2 id="detalhe-mensal" className="font-display mb-4 text-3xl font-semibold">Mês a mês</h2>
+          <div className="overflow-x-auto rounded-xl border border-border bg-card">
+            <table className="w-full min-w-[28rem] text-sm">
+              <caption className="sr-only">Dias marcados, valor guardado e situação da meta em cada mês de {year}</caption>
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th scope="col" className="px-4 py-3 font-semibold">Mês</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Dias</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Guardado</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Da meta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {series.map((x) => {
+                  const pct = goal.goal > 0 ? Math.round((x.saved / goal.goal) * 100) : 0;
+                  return (
+                    <tr key={x.m} className="border-b border-border last:border-0">
+                      <th scope="row" className="px-4 py-2.5 text-left font-semibold">{MONTHS_SHORT[x.m]}</th>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{x.days}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{formatMoney(x.saved, cur)}</td>
+                      <td className={`px-4 py-2.5 text-right font-semibold tabular-nums ${x.reached ? "text-primary" : "text-muted-foreground"}`}>
+                        {x.reached ? "Meta batida" : x.days === 0 ? "—" : `${pct}%`}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="mt-12" aria-labelledby="conquistas">
