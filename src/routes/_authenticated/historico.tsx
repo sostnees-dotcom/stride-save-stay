@@ -35,11 +35,11 @@ function HistoryPage() {
 
   const goal = data?.goals.find((g) => g.id === goalId) ?? data?.goals[0];
   const series = useMemo(
-    () => (data && goal ? yearSeries(data.progress, goal, year) : []),
+    () => (data && goal ? yearSeries(data.progress, goal, year, data.bonus) : []),
     [data, goal, year],
   );
   const achievements = useMemo(
-    () => (data ? computeAchievements(data.progress, data.goals, data.currency) : []),
+    () => (data ? computeAchievements(data.progress, data.goals, data.currency, data.bonus) : []),
     [data],
   );
 

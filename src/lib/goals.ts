@@ -56,6 +56,8 @@ export function computeAchievements(
   progress: Record<string, boolean[]>,
   goals: GoalInfo[],
   currency = "BRL",
+  /** Extra money per progress key from custom deposit amounts (see deposit-details.ts). */
+  bonus: Record<string, number> = {},
 ): Achievement[] {
   const byId = new Map(goals.map((g) => [g.id, g]));
   let totalDays = 0;
@@ -70,10 +72,11 @@ export function computeAchievements(
     const days = arr.slice(0, daysIn(p.y, p.m));
     const done = days.filter(Boolean).length;
     totalDays += done;
-    totalSaved += done * g.dailyValue;
+    const monthSaved = done * g.dailyValue + (bonus[k] ?? 0);
+    totalSaved += monthSaved;
     bestRun = Math.max(bestRun, longestRun(days));
     if (done > 0 && done === daysIn(p.y, p.m)) perfectMonth = true;
-    if (g.goal > 0 && done * g.dailyValue >= g.goal) goalMonths++;
+    if (g.goal > 0 && monthSaved >= g.goal) goalMonths++;
   }
   const a = (id: string, title: string, description: string, unlocked: boolean) => ({
     id,
@@ -94,11 +97,18 @@ export function computeAchievements(
 }
 
 /** Amount saved per month of a year for one goal. */
-export function yearSeries(progress: Record<string, boolean[]>, goal: GoalInfo, year: number) {
+export function yearSeries(
+  progress: Record<string, boolean[]>,
+  goal: GoalInfo,
+  year: number,
+  bonus: Record<string, number> = {},
+) {
   return Array.from({ length: 12 }, (_, m) => {
     const month = `${year}-${String(m + 1).padStart(2, "0")}`;
-    const arr = progress[progressKey(goal.id, month)] ?? [];
+    const key = progressKey(goal.id, month);
+    const arr = progress[key] ?? [];
     const done = arr.slice(0, daysIn(year, m)).filter(Boolean).length;
-    return { m, saved: done * goal.dailyValue, days: done, reached: goal.goal > 0 && done * goal.dailyValue >= goal.goal };
+    const saved = done * goal.dailyValue + (bonus[key] ?? 0);
+    return { m, saved, days: done, reached: goal.goal > 0 && saved >= goal.goal };
   });
 }

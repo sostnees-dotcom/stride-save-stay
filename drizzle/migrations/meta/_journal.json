@@ -15,6 +15,13 @@
       "when": 1792450897416,
       "tag": "0001_goals_and_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793100000000,
+      "tag": "0002_deposit_details",
+      "breakpoints": true
     }
   ]
 }
