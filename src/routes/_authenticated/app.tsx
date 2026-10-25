@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Flame,
+  Pencil,
   Loader2,
   LogOut,
   Moon,
@@ -26,6 +27,7 @@ import { Confetti } from "@/components/confetti";
 import { InsightsPanel } from "@/components/insights-panel";
 import { DayDetailsPanel } from "@/components/day-details-panel";
 import { PlannerPanel } from "@/components/planner-panel";
+import { QuickDepositForm } from "@/components/quick-deposit-form";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -507,6 +509,14 @@ export function App() {
     return ok;
   };
 
+  // "Guardar com outro valor": inline form next to the Guardar button.
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickNotice, setQuickNotice] = useState<string | null>(null);
+  useEffect(() => {
+    setQuickOpen(false);
+    setQuickNotice(null);
+  }, [key]);
+
   // Retry pending saves when the connection returns or the tab is hidden,
   // and warn before closing the page with unsaved days.
   useEffect(() => {
@@ -652,6 +662,25 @@ export function App() {
     const current = normalize(progressRef.current[key], days);
     rememberUndo(current, "Dias até hoje marcados.");
     persist(current.map((c, j) => c || j < todayDate));
+  };
+
+  // Marks the next day exactly like the Guardar button, then saves its custom amount / note.
+  // The day stays marked even if the detail cannot be saved (a tap is never rolled back).
+  const guardWithDetail = async (detail: DayDetail) => {
+    if (nextDay < 0) return;
+    const day = nextDay + 1;
+    toggle(nextDay);
+    setQuickOpen(false);
+    if (detail.amount === null && detail.note === "") {
+      setQuickNotice(null);
+      return;
+    }
+    const ok = await saveDayDetail(day, detail);
+    setQuickNotice(
+      ok
+        ? null
+        : `Dia ${day} marcado, mas não foi possível salvar o valor ou a anotação. Tente de novo em "Detalhes dos depósitos".`,
+    );
   };
 
   const signOut = async () => {
@@ -1113,7 +1142,39 @@ export function App() {
                   Guardar {money(settings.dailyValue)}
                   <ArrowUpRight />
                 </Button>
+                {detailsAvailable && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-expanded={quickOpen}
+                    aria-label="Guardar com outro valor ou anotação"
+                    title="Guardar com outro valor ou anotação"
+                    onClick={() => {
+                      setQuickNotice(null);
+                      setQuickOpen((v) => !v);
+                    }}
+                    className="h-10 gap-2 font-semibold"
+                  >
+                    <Pencil />
+                    Outro valor
+                  </Button>
+                )}
               </div>
+              {quickOpen && (
+                <QuickDepositForm
+                  key={`${key}-${nextDay}`}
+                  day={nextDay + 1}
+                  dailyValue={settings.dailyValue}
+                  money={money}
+                  onSubmit={(detail) => void guardWithDetail(detail)}
+                  onCancel={() => setQuickOpen(false)}
+                />
+              )}
+              {quickNotice && (
+                <p aria-live="polite" className="w-full text-sm font-semibold text-destructive">
+                  {quickNotice}
+                </p>
+              )}
             </div>
           )}
 
