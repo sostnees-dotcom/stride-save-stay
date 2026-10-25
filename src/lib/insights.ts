@@ -21,6 +21,8 @@ export type InsightInput = {
   dailyValue: number;
   goal: number;
   money: (value: number) => string;
+  /** Extra money from custom deposit amounts, added to the standard `marked days x daily value`. */
+  savedExtra?: number;
 };
 
 const WEEKDAYS_PLURAL = ["domingos", "segundas", "terças", "quartas", "quintas", "sextas", "sábados"];
@@ -35,7 +37,7 @@ export function computeInsights(input: InsightInput): Insight[] {
 
   const today = Math.min(Math.max(Math.trunc(input.today), 1), days);
   const done = completed.filter(Boolean).length;
-  const saved = done * dailyValue;
+  const saved = done * dailyValue + (input.savedExtra ?? 0);
   const remaining = Math.max(goal - saved, 0);
   const insights: Insight[] = [];
 

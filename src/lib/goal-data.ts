@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { bonusByKey } from "@/lib/deposit-details";
+import { fetchDetails } from "@/lib/deposit-details-db";
 import { MAIN_GOAL, daysIn, parseProgressKey, progressKey, type GoalInfo } from "@/lib/goals";
 
 export type AccountData = {
@@ -8,6 +10,8 @@ export type AccountData = {
   theme: string;
   goals: GoalInfo[];
   progress: Record<string, boolean[]>;
+  /** Extra money per progress key from custom deposit amounts (empty when none or unavailable). */
+  bonus: Record<string, number>;
 };
 
 const normalize = (raw: unknown, days: number) => {
@@ -55,6 +59,13 @@ export async function loadAccountData(): Promise<AccountData> {
   } catch {
     // ignore unreadable backup
   }
+  const detailsMap = await fetchDetails(user.id);
+  const bonus = detailsMap
+    ? bonusByKey(progress, detailsMap, (k) => {
+        const p = parseProgressKey(k);
+        return p ? goals.find((g) => g.id === p.goalId)?.dailyValue : undefined;
+      })
+    : {};
   return {
     userId: user.id,
     displayName: prof.data?.display_name ?? "",
@@ -62,6 +73,7 @@ export async function loadAccountData(): Promise<AccountData> {
     theme: prof.data?.theme ?? "system",
     goals,
     progress,
+    bonus,
   };
 }
 

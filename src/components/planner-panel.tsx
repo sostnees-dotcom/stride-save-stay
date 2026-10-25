@@ -101,7 +101,7 @@ export function PlannerPanel({ today, daysInMonth, currentDaily, money, onApply 
           <ChallengePlanner money={money} onApply={apply} />
         )}
 
-        <p role="status" aria-live="polite" className="mt-4 text-sm font-semibold text-primary">
+        <p aria-live="polite" className="mt-4 text-sm font-semibold text-primary">
           {notice}
         </p>
       </div>

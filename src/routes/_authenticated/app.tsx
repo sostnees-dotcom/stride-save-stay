@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Flame,
+  Pencil,
   Loader2,
   LogOut,
   Moon,
@@ -24,7 +25,9 @@ import {
 
 import { Confetti } from "@/components/confetti";
 import { InsightsPanel } from "@/components/insights-panel";
+import { DayDetailsPanel } from "@/components/day-details-panel";
 import { PlannerPanel } from "@/components/planner-panel";
+import { QuickDepositForm } from "@/components/quick-deposit-form";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -35,6 +38,8 @@ import {
   progressKey,
   type GoalInfo,
 } from "@/lib/goals";
+import { bonusFor, savedFor, type DayDetail, type DetailsMap } from "@/lib/deposit-details";
+import { fetchDetails, saveDetail } from "@/lib/deposit-details-db";
 import { useAnimatedNumber } from "@/lib/use-animated-number";
 
 export const Route = createFileRoute("/_authenticated/app")({
@@ -168,6 +173,9 @@ export function App() {
   const prevProgress = useRef(0);
   const lastMonth = useRef(monthKey(NOW.getFullYear(), NOW.getMonth()));
   const stripRef = useRef<HTMLDivElement>(null);
+  // Per-day details (custom amount and note), declared early because month summaries use them.
+  const [detailsMap, setDetailsMap] = useState<DetailsMap>({});
+  const [detailsAvailable, setDetailsAvailable] = useState(false);
   // Which day just changed, so only that coin plays the "pop" animation.
   const [popIdx, setPopIdx] = useState<number | null>(null);
   const popTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -364,14 +372,16 @@ export function App() {
     for (const [k, arr] of Object.entries(progressMap)) {
       const parsed = parseProgressKey(k);
       if (!parsed || parsed.goalId !== wantedGoal) continue;
-      const done = normalize(arr, daysIn(parsed.y, parsed.m)).filter(Boolean).length;
+      const monthSaved = savedFor(
+        normalize(arr, daysIn(parsed.y, parsed.m)),
+        detailsMap[k],
+        settings.dailyValue,
+      );
       out[parsed.month] =
-        settings.goal > 0
-          ? Math.min(((done * settings.dailyValue) / settings.goal) * 100, 100)
-          : 0;
+        settings.goal > 0 ? Math.min((monthSaved / settings.goal) * 100, 100) : 0;
     }
     return out;
-  }, [progressMap, settings.goal, settings.dailyValue, activeGoal, activeExtra]);
+  }, [progressMap, detailsMap, settings.goal, settings.dailyValue, activeGoal, activeExtra]);
 
   function storePending(uid: string) {
     const count = Object.keys(dirty.current).length;
@@ -471,6 +481,42 @@ export function App() {
     persist(last.prev);
   };
 
+  // Per-day details (custom amount and note). Loaded apart from the days themselves, so a
+  // missing table never affects marking or saving days.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void fetchDetails(userId).then((loaded) => {
+      if (cancelled) return;
+      setDetailsAvailable(loaded !== null);
+      if (loaded) setDetailsMap(loaded);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+  const saveDayDetail = async (day: number, detail: DayDetail) => {
+    if (!userId) return false;
+    const ok = await saveDetail(userId, activeExtra ? activeGoal : MAIN_GOAL, monthKey(year, month), day, detail);
+    if (ok) {
+      setDetailsMap((prev) => {
+        const current = { ...(prev[key] ?? {}) };
+        if (detail.amount === null && detail.note === "") delete current[day];
+        else current[day] = detail;
+        return { ...prev, [key]: current };
+      });
+    }
+    return ok;
+  };
+
+  // "Guardar com outro valor": inline form next to the Guardar button.
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickNotice, setQuickNotice] = useState<string | null>(null);
+  useEffect(() => {
+    setQuickOpen(false);
+    setQuickNotice(null);
+  }, [key]);
+
   // Retry pending saves when the connection returns or the tab is hidden,
   // and warn before closing the page with unsaved days.
   useEffect(() => {
@@ -497,7 +543,8 @@ export function App() {
   }, [userId]);
 
   const done = completed.filter(Boolean).length;
-  const saved = done * settings.dailyValue;
+  const detailsForKey = detailsMap[key];
+  const saved = savedFor(completed, detailsForKey, settings.dailyValue);
   const remaining = Math.max(settings.goal - saved, 0);
   const progress =
     settings.goal > 0 ? Math.min((saved / settings.goal) * 100, 100) : 0;
@@ -615,6 +662,25 @@ export function App() {
     const current = normalize(progressRef.current[key], days);
     rememberUndo(current, "Dias até hoje marcados.");
     persist(current.map((c, j) => c || j < todayDate));
+  };
+
+  // Marks the next day exactly like the Guardar button, then saves its custom amount / note.
+  // The day stays marked even if the detail cannot be saved (a tap is never rolled back).
+  const guardWithDetail = async (detail: DayDetail) => {
+    if (nextDay < 0) return;
+    const day = nextDay + 1;
+    toggle(nextDay);
+    setQuickOpen(false);
+    if (detail.amount === null && detail.note === "") {
+      setQuickNotice(null);
+      return;
+    }
+    const ok = await saveDayDetail(day, detail);
+    setQuickNotice(
+      ok
+        ? null
+        : `Dia ${day} marcado, mas não foi possível salvar o valor ou a anotação. Tente de novo em "Detalhes dos depósitos".`,
+    );
   };
 
   const signOut = async () => {
@@ -912,6 +978,7 @@ export function App() {
                 dailyValue: settings.dailyValue,
                 goal: settings.goal,
                 money,
+                savedExtra: bonusFor(completed, detailsForKey, settings.dailyValue),
               }}
             />
           )}
@@ -928,6 +995,16 @@ export function App() {
               field?.scrollIntoView({ behavior: "smooth", block: "center" });
               (field as HTMLInputElement | null)?.focus({ preventScroll: true });
             }}
+          />
+
+          <DayDetailsPanel
+            monthLabel={MONTHS[month]!.toLowerCase()}
+            completed={completed}
+            details={detailsForKey}
+            dailyValue={settings.dailyValue}
+            money={money}
+            available={detailsAvailable}
+            onSave={saveDayDetail}
           />
 
           <div className="mb-5 mt-8 flex flex-wrap items-end justify-between gap-4">
@@ -1065,7 +1142,39 @@ export function App() {
                   Guardar {money(settings.dailyValue)}
                   <ArrowUpRight />
                 </Button>
+                {detailsAvailable && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-expanded={quickOpen}
+                    aria-label="Guardar com outro valor ou anotação"
+                    title="Guardar com outro valor ou anotação"
+                    onClick={() => {
+                      setQuickNotice(null);
+                      setQuickOpen((v) => !v);
+                    }}
+                    className="h-10 gap-2 font-semibold"
+                  >
+                    <Pencil />
+                    Outro valor
+                  </Button>
+                )}
               </div>
+              {quickOpen && (
+                <QuickDepositForm
+                  key={`${key}-${nextDay}`}
+                  day={nextDay + 1}
+                  dailyValue={settings.dailyValue}
+                  money={money}
+                  onSubmit={(detail) => void guardWithDetail(detail)}
+                  onCancel={() => setQuickOpen(false)}
+                />
+              )}
+              {quickNotice && (
+                <p aria-live="polite" className="w-full text-sm font-semibold text-destructive">
+                  {quickNotice}
+                </p>
+              )}
             </div>
           )}
 
@@ -1091,7 +1200,7 @@ export function App() {
       {undoLabel && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
           <div
-            role="status"
+            aria-live="polite"
             className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-card py-2 pl-5 pr-2 text-sm font-semibold shadow-card"
           >
             <span>{undoLabel}</span>
