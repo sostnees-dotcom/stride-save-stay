@@ -8,6 +8,7 @@ const cloud = vi.hoisted(() => ({
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (options: unknown) => options,
   useNavigate: () => vi.fn(),
+  Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
 }));
 vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({ cancelQueries: vi.fn(), clear: vi.fn() }) }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {

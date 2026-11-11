@@ -111,7 +111,10 @@ export function computeInsights(input: InsightInput): Insight[] {
   if (done >= 4) {
     const byWeekday = new Array<number>(7).fill(0);
     completed.forEach((c, i) => {
-      if (c) byWeekday[new Date(year, month, i + 1).getDay()]++;
+      if (c) {
+        const weekday = new Date(year, month, i + 1).getDay();
+        byWeekday[weekday] = (byWeekday[weekday] ?? 0) + 1;
+      }
     });
     const best = Math.max(...byWeekday);
     const winners = byWeekday.filter((n) => n === best).length;
@@ -120,7 +123,7 @@ export function computeInsights(input: InsightInput): Insight[] {
       insights.push({
         id: "weekday",
         tone: "info",
-        title: `Você marca mais nas ${WEEKDAYS_PLURAL[idx]}`,
+        title: `Você marca mais nas ${WEEKDAYS_PLURAL[idx]!}`,
         text: `${best} dos seus ${done} depósitos do mês foram nesse dia da semana.`,
       });
     }

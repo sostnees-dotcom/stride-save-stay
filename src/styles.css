@@ -311,6 +311,18 @@
   .scroll-progress { display: block; }
 }
 
+/* Native-app spacing around phone notches and the home indicator. */
+.app-bottom-nav {
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+@media (display-mode: standalone) {
+  body {
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 /* Smooth cross-fade between routes (TanStack Router view transitions). */
 ::view-transition-old(root),
 ::view-transition-new(root) {
