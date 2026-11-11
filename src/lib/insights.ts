@@ -120,7 +120,7 @@ export function computeInsights(input: InsightInput): Insight[] {
       insights.push({
         id: "weekday",
         tone: "info",
-        title: `Você marca mais nas ${WEEKDAYS_PLURAL[idx]}`,
+        title: `Você marca mais nas ${WEEKDAYS_PLURAL[idx]!}`,
         text: `${best} dos seus ${done} depósitos do mês foram nesse dia da semana.`,
       });
     }

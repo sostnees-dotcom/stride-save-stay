@@ -1198,7 +1198,7 @@ export function App() {
       </main>
 
       {undoLabel && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
+        <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4 md:bottom-6">
           <div
             aria-live="polite"
             className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-card py-2 pl-5 pr-2 text-sm font-semibold shadow-card"
